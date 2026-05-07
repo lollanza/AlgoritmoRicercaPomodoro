@@ -388,6 +388,8 @@ def process_folder(model_path=MODEL_PATH, image_dir=IMAGE_DIR, output_dir=OUTPUT
                     "x": det["centroid"][0], 
                     "y": det["centroid"][1], 
                     "rank": rank,
+                    "geo_score": det["geo_score"],
+                    "maturity": det["maturity"],
                     "bbox": det["bbox"].tolist() if hasattr(det["bbox"], "tolist") else det["bbox"]
                 }
                 for rank, det in enumerate(top, 1)

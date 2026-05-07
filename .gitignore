@@ -1,0 +1,28 @@
+# --- Ambienti Virtuali ---
+venv/
+
+
+# --- Machine Learning & YOLO ---
+# Escludi tutti i log di training, pesi .pt e checkpoint
+runs/
+# Escludi il dataset (troppo pesante per GitHub)
+datasetAggiornato/
+
+
+
+
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# --- Sistema & IDE ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Dati Temporanei ---
+*.log
+IMPLEMENTAZIONE_OCCLUSIONI.md

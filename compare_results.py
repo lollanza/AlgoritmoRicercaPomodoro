@@ -5,27 +5,38 @@ import json
 
 # Configurazione cartelle
 ORIGINAL_DIR = "immaginiPerAlgoritmo"
-PROCESSED_DIR = "output_reachability"
-JSON_PATH = os.path.join(PROCESSED_DIR, "algorithm_results.json")
+PROCESSED_BBOX_DIR = "output_reachability"
+PROCESSED_CIRC_DIR = "output_reachability_circular"
 
-# Colori per i Rank (coerenti con reachability_ranking.py)
+JSON_BBOX_PATH = os.path.join(PROCESSED_BBOX_DIR, "algorithm_results.json")
+JSON_CIRC_PATH = os.path.join(PROCESSED_CIRC_DIR, "algorithm_results_circular.json")
+
+# Colori per i rank (BGR)
 RANK_COLORS = {
     1: (0, 255, 0),    # Verde
-    2: (0, 200, 255),  # Arancio
-    3: (0, 100, 255),  # Rosso-arancio
+    2: (0, 200, 255),  # Giallo/Arancio
+    3: (0, 100, 255),  # Arancio/Rosso
 }
 
 def compare_images():
-    # Carica i risultati dell'algoritmo dal JSON
-    algo_data = {}
-    if os.path.exists(JSON_PATH):
+    # ... (caricamento JSON invariato)
+    algo_bbox_data = {}
+    algo_circ_data = {}
+    
+    if os.path.exists(JSON_BBOX_PATH):
         try:
-            with open(JSON_PATH, "r") as f:
-                algo_data = json.load(f)
+            with open(JSON_BBOX_PATH, "r") as f:
+                algo_bbox_data = json.load(f)
         except Exception as e:
-            print(f"Errore nel caricamento del JSON: {e}")
+            print(f"Errore caricamento JSON BBox: {e}")
 
-    # Prendi la lista dei file originali
+    if os.path.exists(JSON_CIRC_PATH):
+        try:
+            with open(JSON_CIRC_PATH, "r") as f:
+                algo_circ_data = json.load(f)
+        except Exception as e:
+            print(f"Errore caricamento JSON Circolare: {e}")
+
     files = sorted([f for f in os.listdir(ORIGINAL_DIR) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
     
     if not files:
@@ -38,105 +49,154 @@ def compare_images():
     while True:
         filename = files[idx]
         path_orig = os.path.join(ORIGINAL_DIR, filename)
-        path_proc = os.path.join(PROCESSED_DIR, f"ranked_{filename}")
+        path_circ = os.path.join(PROCESSED_CIRC_DIR, f"ranked_{filename}")
 
         img_orig = cv2.imread(path_orig)
-        img_proc = cv2.imread(path_proc)
+        img_circ = cv2.imread(path_circ)
 
-        if img_proc is None:
+        if img_orig is None or img_circ is None:
+            print(f"Mancano immagini per {filename}")
             idx = (idx + 1) % total
             continue
 
-        # Allineamento altezza (senza offset orizzontale)
-        h_proc, w_proc = img_proc.shape[:2]
         h_orig, w_orig = img_orig.shape[:2]
         
-        diff_h = max(0, h_proc - h_orig)
-        img_orig_padded = cv2.copyMakeBorder(img_orig, 0, diff_h, 0, 0, cv2.BORDER_CONSTANT, value=(0,0,0))
+        # Creiamo i tre pannelli partendo dall'originale per i primi due
+        margin_bottom = 500
+        def create_panel(base_img):
+            return cv2.copyMakeBorder(base_img, 0, margin_bottom, 0, 0, cv2.BORDER_CONSTANT, value=(0,0,0))
 
-        # --- DISEGNO MARKER E LEGENDE ---
-        if filename in algo_data:
-            # 1. IMMAGINE SINISTRA (NAIVE)
-            free_targets = algo_data[filename].get("free_targets", [])
+        img_naive_p = create_panel(img_orig.copy())
+        img_bbox_task_p = create_panel(img_orig.copy())
+        img_circ_task_p = cv2.copyMakeBorder(img_circ, 0, 0, 0, 0, cv2.BORDER_CONSTANT, value=(0,0,0)) # Già ha la sua legenda
+
+        # --- PANNELLO 1: NAIVE (BBOX CIANO + ELLISSI BIANCHE) ---
+        if filename in algo_bbox_data:
+            free_targets = algo_bbox_data[filename].get("free_targets", [])
             for i, target in enumerate(free_targets, 1):
                 tx, ty = target.get("x"), target.get("y")
+                
+                # Bounding Box (Ciano chiaro, spessore 2)
                 bbox = target.get("bbox")
                 
-                # Disegno Bounding Box
                 if bbox:
                     x1, y1, x2, y2 = map(int, bbox)
-                    cv2.rectangle(img_orig_padded, (x1, y1), (x2, y2), (255, 255, 255), 1)
-                    # Label piccola per la box
-                    cv2.putText(img_orig_padded, f"#{i}", (x1, y1 - 5),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
-
+                    cv2.rectangle(img_naive_p, (x1, y1), (x2, y2), (255, 255, 0), 2, cv2.LINE_AA)
+                
+                # Ellisse (Bianca, spessore 2)
+                # FALLBACK: Cerchiamo l'ellisse nel JSON circolare per disegnarla (solo estetica)
+                ellipse = None
+                if filename in algo_circ_data:
+                    for other in algo_circ_data[filename].get("free_targets", []):
+                        ox, oy = other.get("x"), other.get("y")
+                        if abs(tx - ox) < 8 and abs(ty - oy) < 8:
+                            ellipse = other.get("ellipse")
+                            break
+                
+                if ellipse:
+                    center = (int(ellipse[0][0]), int(ellipse[0][1]))
+                    axes = (int(ellipse[1][0] / 2), int(ellipse[1][1] / 2))
+                    angle = ellipse[2]
+                    cv2.ellipse(img_naive_p, center, axes, angle, 0, 360, (255, 255, 255), 2, cv2.LINE_AA)
+                
                 if tx is not None and ty is not None:
                     cx, cy = int(tx), int(ty)
-                    cv2.circle(img_orig_padded, (cx, cy), 10, (255, 255, 255), -1)
-                    cv2.putText(img_orig_padded, str(i), (cx - 4, cy + 4),
+                    cv2.circle(img_naive_p, (cx, cy), 10, (255, 255, 255), -1)
+                    cv2.putText(img_naive_p, str(i), (cx - 4, cy + 4),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1, cv2.LINE_AA)
-            
-            # DISEGNO LEGENDA NAIVE (Sotto l'immagine di sinistra)
-            x_leg, y_ptr = 40, h_orig + 40
+
+            # Legenda Naive
+            x_leg, y_ptr = 50, h_orig + 50
             for i, det in enumerate(free_targets):
-                # Rimosso il disegno ridondante dei marker qui, ora è gestito nel loop sopra
-                
-                # Scrivo i dati in legenda per tutti e 5
-                cv2.putText(img_orig_padded, f"TARGET #{i+1} -> G: {det['geo_score']:.2f} | M: {det['maturity']:.0%}", (x_leg, y_ptr),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1, cv2.LINE_AA)
-                y_ptr += 25
-                cv2.putText(img_orig_padded, f"  Area: {det['area']}px", (x_leg, y_ptr),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1, cv2.LINE_AA)
+                info_text = f"#{i+1}  G: {det['geo_score']:.2f} | M: {det['maturity']:.0%} | A: {det['area']}px"
+                cv2.rectangle(img_naive_p, (x_leg - 30, y_ptr - 15), (x_leg - 10, y_ptr + 2), (255, 255, 255), 1)
+                cv2.putText(img_naive_p, info_text, (x_leg, y_ptr), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1, cv2.LINE_AA)
                 y_ptr += 35
 
-            # 2. IMMAGINE DESTRA (TASK PLANNING)
-            # (Le legende e le maschere sono già impresse in img_proc da reachability_ranking.py)
-            # Aggiungiamo solo i marker se vogliamo extra visibilità o lasciamo quelli originali
-            pass
+        # --- PANNELLO 2: BBOX TASK (SOLO BBOX COLORATE) ---
+        if filename in algo_bbox_data:
+            targets = algo_bbox_data[filename].get("targets", [])
+            for target in targets:
+                rank = target.get("rank")
+                color = RANK_COLORS.get(rank, (255, 255, 255))
+                bbox = target.get("bbox")
+                if bbox:
+                    x1, y1, x2, y2 = map(int, bbox)
+                    cv2.rectangle(img_bbox_task_p, (x1, y1), (x2, y2), color, 2, cv2.LINE_AA)
+                
+                tx, ty = target.get("x"), target.get("y")
+                if tx is not None and ty is not None:
+                    cx, cy = int(tx), int(ty)
+                    cv2.circle(img_bbox_task_p, (cx, cy), 12, color, -1)
+                    cv2.circle(img_bbox_task_p, (cx, cy), 12, (255, 255, 255), 2)
+                    cv2.putText(img_bbox_task_p, str(rank), (cx - 5, cy + 5),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-        # Testo identificativo sulle immagini
-        cv2.putText(img_orig_padded, "ORIGINALE", (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.putText(img_proc, "RANKING", (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            # Legenda BBox Task
+            x_leg, y_ptr = 50, h_orig + 50
+            for i, target in enumerate(targets):
+                rank = i + 1
+                color = RANK_COLORS.get(rank, (255, 255, 255))
+                geo = target.get("geo_score", 0)
+                mat = target.get("maturity", 0)
+                
+                cv2.rectangle(img_bbox_task_p, (x_leg - 30, y_ptr - 20), (x_leg - 10, y_ptr + 5), color, -1)
+                cv2.putText(img_bbox_task_p, f"RANK {rank} (BBOX)", (x_leg, y_ptr), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                y_ptr += 35
+                cv2.putText(img_bbox_task_p, f" > G: {geo:.2f} | M: {mat:.0%}", (x_leg, y_ptr), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                y_ptr += 60
 
-        # Affiancamento
-        combined = cv2.hconcat([img_orig_padded, img_proc])
+        # --- PANNELLO 3: TASK CIRCOLARE (ORIGINALE DA DISCO: MASCHERA + ELLISSE) ---
+        # img_circ_task_p contiene già img_circ con maschere ed ellissi colorate. Non aggiungiamo altro.
+
+
+
+        # Testi identificativi
+        cv2.putText(img_naive_p, "1. NAIVE (MATURI)", (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        cv2.putText(img_bbox_task_p, "2. TASK (BBOX ONLY)", (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        cv2.putText(img_circ_task_p, "3. TASK (CIRCLE + MASK)", (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+        # --- SICUREZZA: Allineamento altezze prima di hconcat ---
+        h1, h2, h3 = img_naive_p.shape[0], img_bbox_task_p.shape[0], img_circ_task_p.shape[0]
+        max_h = max(h1, h2, h3)
         
-        # --- CREAZIONE BARRA DEI COMANDI (Status Bar) ---
-        header_h = 110
+        def final_pad(img, target_h):
+            h, w = img.shape[:2]
+            if h < target_h:
+                return cv2.copyMakeBorder(img, 0, target_h - h, 0, 0, cv2.BORDER_CONSTANT, value=(0,0,0))
+            return img
+
+        img_naive_p = final_pad(img_naive_p, max_h)
+        img_bbox_task_p = final_pad(img_bbox_task_p, max_h)
+        img_circ_task_p = final_pad(img_circ_task_p, max_h)
+
+        # Affiancamento dei tre pannelli
+        combined = cv2.hconcat([img_naive_p, img_bbox_task_p, img_circ_task_p])
+
+        
+        # Header Status Bar
+        header_h = 100
         header = np.zeros((header_h, combined.shape[1], 3), dtype=np.uint8)
-        
-        # Info immagine e Comandi
-        title_text = f"IMMAGINE {idx+1}/{total}: {filename}"
-        legend_text = "[SINISTRA] Box Bianche = Scelte Libere (Naive) | [DESTRA] Colorate = Task Planning"
-        cmd_text = "Tasti: [FRECCIA DX / N] Avanti | [FRECCIA SX / P] Indietro | [Q / ESC] Esci"
-        
-        cv2.putText(header, title_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(header, legend_text, (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(header, cmd_text, (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+        title_text = f"COMPARISON [{idx+1}/{total}]: {filename}"
+        cmd_text = "N: Next | P: Prev | Q: Quit"
+        cv2.putText(header, title_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(header, cmd_text, (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
         
         final_view = cv2.vconcat([header, combined])
 
-        # Ridimensionamento per lo schermo
-        screen_w = 1400
+        # Resize per lo schermo (molto largo ora che sono 3 immagini)
+        screen_w = 1800
         if final_view.shape[1] > screen_w:
             scale = screen_w / final_view.shape[1]
             final_view = cv2.resize(final_view, (0, 0), fx=scale, fy=scale)
 
-        cv2.imshow("Reviewer Algoritmo di Ranking", final_view)
+        cv2.imshow("Reviewer: Naive vs BBox vs Circular", final_view)
         
-        # waitKey(0) restituisce un intero a 32 bit. Su molti sistemi le frecce 
-        # occupano i bit superiori o hanno codici specifici.
         key = cv2.waitKeyEx(0)
-        
-        # ESCI
         if key == 27 or key == ord('q') or key == ord('Q'):
             break
-            
-        # AVANTI: Freccia Destra (codici comuni: 2555904, 83, 3, 124, 63235) o tasto 'N'
         elif key == ord('n') or key == ord('N') or key in [2555904, 83, 3, 124, 63235, 65363]:
             idx = (idx + 1) % total
-            
-        # INDIETRO: Freccia Sinistra (codici comuni: 2424832, 81, 2, 123, 63234) o tasto 'P'
         elif key == ord('p') or key == ord('P') or key in [2424832, 81, 2, 123, 63234, 65361]:
             idx = (idx - 1) % total
 
