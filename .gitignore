@@ -26,3 +26,5 @@ __pycache__/
 # --- Dati Temporanei ---
 *.log
 IMPLEMENTAZIONE_OCCLUSIONI.md
+GEMINI.md
+tmp_paper_analysis/

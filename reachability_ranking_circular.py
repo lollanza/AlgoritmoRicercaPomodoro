@@ -20,7 +20,7 @@ from ultralytics import YOLO
 # ── Configurazione ──────────────────────────────────────────────────
 MODEL_PATH   = "runs/yolo11NewData6/weights/best.pt"
 IMAGE_DIR    = "immaginiPerAlgoritmo"
-OUTPUT_DIR   = "output_reachability_circular" # Mantengo la cartella per coerenza col nome file
+OUTPUT_DIR   = "output_reachability_circular" 
 TARGET_CLASS = 3          
 CONF         = 0.3        
 IMGSZ        = 800        
@@ -184,7 +184,7 @@ def draw_legend(image, targets, original_h):
 # pipeline principale
 
 def select_targets(candidates, image_bgr):
-    candidates.sort(key=lambda x: x.get("conf", 0), reverse=True)
+    candidates.sort(key=lambda x: x.get("conf", 0), reverse=True)#ordinando per confidenza decrescente prima di deduplicare
     unique_candidates = []
     for cand in candidates:
         is_duplicate = False
