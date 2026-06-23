@@ -10,12 +10,12 @@ L'algoritmo implementa un sistema euristico per determinare l'ordine ottimale di
 
 ```mermaid
 graph TD
-    A[Rilevamento YOLO & Estrazione Maschere] --> B[Screening Geometrico & Fitting Ellisse]
-    B --> C[Deduplicazione Candidati via IoU]
-    C --> D[Stima della Maturità Cromatica HSV]
-    D --> E[Analisi delle Occlusioni Ellittiche 2D]
-    E --> F[Selezione Dinamica Pick & Update]
-    F --> G[Generazione Output JSON & Overlay Visivo]
+    A["Rilevamento YOLO &<br>Estrazione Maschere"] --> B["Screening Geometrico &<br>Fitting Ellisse"]
+    B --> C["Deduplicazione Candidati<br>via IoU"]
+    C --> D["Stima della Maturità<br>Cromatica HSV"]
+    D --> E["Analisi delle Occlusioni<br>Ellittiche 2D"]
+    E --> F["Selezione Dinamica<br>Pick & Update"]
+    F --> G["Generazione Output JSON<br>& Overlay Visivo"]
 ```
 
 ---
