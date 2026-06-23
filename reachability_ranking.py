@@ -158,7 +158,7 @@ def compute_maturity(image_bgr, binary_mask):
     total = red_pixels + green_pixels
 
     if total == 0:
-        return 0.5  # indeterminato (es. pomodoro arancione in transizione)
+        return 0.0  # indeterminato (es. nessun pixel rosso o verde rilevato, trattato come non maturo)
 
     return red_pixels / total
 

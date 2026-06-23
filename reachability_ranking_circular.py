@@ -141,7 +141,7 @@ def compute_maturity(image_bgr, binary_mask):
     total = red_pixels + green_pixels
 
     if total == 0:
-        return 0.5
+        return 0.0
     return red_pixels / total
 
 # visualizzazione 
