@@ -69,7 +69,7 @@ La maturità di ciascuno degli 8 candidati selezionati viene calcolata analizzan
 ---
 
 ### Fase 4: Analisi delle Occlusioni Ellittiche (check_occlusion_ellipse)
-L'algoritmo stima le relazioni di occlusione tra i frutti fittando le ellisioni nello spazio 2D dell'immagine:
+L'algoritmo stima le relazioni di occlusione tra i frutti fittando le ellissi nello spazio 2D dell'immagine:
 
 * Per ogni coppia di candidati $A$ e $B$ nel pool, si verifica se $A$ occlude $B$ proiettando le rispettive ellissi su due maschere binarie dedicate.
 * Si calcola l'area di intersezione tra le due ellissi piene.
@@ -135,6 +135,6 @@ L'attuale implementazione della stima delle occlusioni in [check_occlusion_ellip
     1.  *Occlusione da elementi terzi*: Se la regione $I$ è interamente coperta da un ramo o foglia estranea, si otterrà $\Omega_A \approx 0$ e $\Omega_B \approx 0$. In questo scenario , l'algoritmo non può determinare con certezza l'ordine di profondità e si affida alla stima geometrica basata sulle aree totali delle maschere.
     2.  *Incertezza sui confini*: Per prevenire decisioni errate causate da rumore di segmentazione ai bordi, si applica un margine di confidenza $\epsilon$, richiedendo una maggioranza netta ($\Omega_A > \Omega_B + \epsilon$) per convalidare la relazione di occlusione.
 
-*Nota: L'ispirazione per l'ottimizzazione del depth ordering basato sulla geometria delle sovrapposizioni e sulla distanza euclidea tra i centroidi deriva dal lavoro di Chen e Yang [1] (disponibile localmente in [s11554-011-0222-9.pdf](./tmp_paper_analysis/s11554-011-0222-9.pdf)), che affronta la stima delle occlusioni e l'ordinamento spaziale delle priorità di raccolta attraverso modelli geometrici a basso costo computazionale.*
+*Nota: L'ispirazione per l'ottimizzazione del depth ordering basato sulla geometria delle sovrapposizioni e sulla distanza euclidea tra i centroidi deriva dal lavoro di Chen e Yang [1] (disponibile in [s11554-011-0222-9.pdf](./tmp_paper_analysis/s11554-011-0222-9.pdf)), che affronta la stima delle occlusioni e l'ordinamento spaziale delle priorità di raccolta attraverso modelli geometrici a basso costo computazionale.*
 
 

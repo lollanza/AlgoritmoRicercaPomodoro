@@ -184,7 +184,7 @@ def draw_legend(image, targets, original_h):
 # pipeline principale
 
 def select_targets(candidates, image_bgr):
-    candidates.sort(key=lambda x: x.get("conf", 0), reverse=True)#ordinando per confidenza decrescente prima di deduplicare
+    candidates.sort(key=lambda x: x.get("conf", 0), reverse=True)
     unique_candidates = []
     for cand in candidates:
         is_duplicate = False
