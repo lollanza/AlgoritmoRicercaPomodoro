@@ -118,7 +118,7 @@ def check_occlusion_ellipse(target_maybe_occluded, target_maybe_blocker, img_sha
     
     if area_a == 0: return False
     
-    overlap_ratio = inter_area / float(area_a)
+    overlap_ratio = inter_area / float(area_a)#ERRORE controllo prima qual'è più grande.
     
     # Heuristic: l'occluso ha area visibile minore
     if overlap_ratio > IOU_THRESHOLD and target_maybe_occluded["area"] < target_maybe_blocker["area"]:
