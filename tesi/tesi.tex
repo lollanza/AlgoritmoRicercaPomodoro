@@ -1,38 +1,76 @@
 \documentclass[12pt,a4paper]{report}
 
+% --- Codifica e Lingua ---
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage[italian]{babel}
+
+% --- Layout e Geometria ---
+\usepackage[top=3cm, bottom=3cm, left=3.5cm, right=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing
+
+% --- Intestazioni di Pagina ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\slshape\nouppercase{\leftmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{15pt}
+
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyfoot[C]{\thepage}%
+  \renewcommand{\headrulewidth}{0pt}%
+}
+
+% --- Matematica e Simboli ---
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}
+
+% --- Tabelle e Figure ---
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\graphicspath{{figures/}}
+
+% --- Algoritmi e Codice ---
+\usepackage[ruled,vlined,linesnumbered,italiano]{algorithm2e}
+
+% --- Riferimenti e Bibliografia ---
+\usepackage{csquotes}
+\usepackage[backend=biber,style=ieee]{biblatex}
+\addbibresource{bibliografia.bib}
+
+% Inserimento del riferimento a piè di pagina ad ogni utilizzo
+\let\oldcite\cite
+\renewcommand{\cite}[1]{\oldcite{#1}\footnote{\fullcite{#1}}}
+
 \usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
 
 \begin{document}
 
+% --- Indice ---
+\pagenumbering{roman}
+\setcounter{tocdepth}{2}
 \tableofcontents
 \newpage
 
-\chapter{Introduzione}
-\section{Deep Learning per la Computer Vision in Agricoltura}
-\section{Metodologie di Stima delle Occlusioni in Letteratura}
+\pagenumbering{arabic}
 
-\chapter{Pipeline Decisionale e Modellazione Geometrica delle Occlusioni}
-\section{Architettura e Screening Geometrico}
-\section{Deduplicazione e Filtro di Maturità}
-\section{La Fallacia delle Bounding Box (BBox)}
-\section{Modellazione Ellittica con Convex Hull}
-\section{Risoluzione del Depth Ordering (``Area Ownership'')}
+% --- Capitoli ---
+\include{chapters/cap1_introduzione}
+\include{chapters/cap2_stato_arte}
+\include{chapters/cap3_metodologia}
+\include{chapters/cap4_validazione}
+\include{chapters/conclusioni}
 
-\chapter{Algoritmo Dinamico di Task Planning e Analisi della Complessità}
-\section{Logica Dinamica ``Pick \& Update''}
-\section{Analisi della Complessità e Strategie di Scrematura}
-
-\chapter{Validazione Sperimentale e Discussione}
-\section{Configurazione di Test e Dataset}
-\section{Analisi Comparativa delle Strategie di Picking}
-
-\chapter*{Conclusioni e Sviluppi Futuri}
-\addcontentsline{toc}{chapter}{Conclusioni e Sviluppi Futuri}
-
-\chapter*{Bibliografia}
-\addcontentsline{toc}{chapter}{Bibliografia}
+% --- Bibliografia ---
+\nocite{*}
+\printbibliography[title=Bibliografia]
 
 \end{document}

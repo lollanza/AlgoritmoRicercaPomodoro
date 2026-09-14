@@ -1,0 +1,302 @@
+\chapter{Metodologia e Pipeline Decisionale}
+\label{chap:metodologia}
+
+In questo capitolo viene presentata la pipeline decisionale sviluppata per trasformare le rilevazioni visive del modello di segmentazione in una sequenza ordinata e sicura di raccolta per un braccio robotico. Nei contesti reali di serra, la densità dei grappoli e la presenza di fogliame generano frequenti sovrapposizioni tra i frutti: la sola identificazione 2D non basta a pianificare l'azione della pinza.
+L'architettura proposta si articola in quattro fasi consecutive:
+\begin{enumerate}
+    \item \textbf{Modellazione geometrica}: stima della forma e dell'orientamento dei pomodori tramite ellissi fittate sull'involucro convesso (\textit{Convex Hull}), superando le limitazioni delle \textit{bounding box};
+    \item \textbf{Screening e scoring}: esclusione dei frutti con area inferiore alla soglia minima e assegnazione di un punteggio geometrico combinato (area visibile, circolarità e centralità);
+    \item \textbf{Filtro di maturità}: separazione dei pomodori maturi da quelli acerbi tramite sogliatura nello spazio colore HSV, trattando i frutti verdi come ostacoli statici;
+    \item \textbf{Depth ordering e task planning}: stima delle occlusioni mutue tramite sovrapposizione tra ellissi e determinazione iterativa della sequenza di prelievo (\textit{Pick \& Update}).
+\end{enumerate}
+
+\section{Limiti delle Bounding Box e Modellazione Ellittica con Convex Hull}
+\label{sec:modellazione_geometrica}
+
+A partire da ciascuna immagine acquisita in serra, il modello di Instance Segmentation (YOLOv11-seg) individua i pomodori presenti nella scena, restituendo per ciascun frutto rilevato una tupla:
+\begin{equation}
+    \mathcal{D}_i = \left( B_i, \mathcal{M}_i, c_i \right)
+\end{equation}
+dove $B_i = [x_1, y_1, x_2, y_2]$ identifica le coordinate della \textit{bounding box} assiale, $\mathcal{M}_i \in \{0, 1\}^{H \times W}$ è la maschera binaria dei pixel appartenenti all'istanza e $c_i \in [0, 1]$ rappresenta il livello di confidenza associato alla predizione.
+
+\subsection{Limiti Geometrici delle Bounding Box Assiali}
+\label{subsec:limiti_bbox}
+
+Nel campo della visione artificiale, l'approccio standard per localizzare gli oggetti si basa sulle \textit{bounding box} allineate agli assi dell'immagine (\textit{Axis-Aligned Bounding Box}, AABB) \cite{redmon2016you}. Tuttavia, nei sistemi di raccolta robotizzata di frutti aggregati in grappoli compatti \cite{chen2011practical}, l'impiego dei soli riquadri rettangolari evidenzia un limite geometrico strutturale.
+I pomodori possiedono una sagoma curvilinea, mentre la bounding box è un rettangolo rigido vincolato all'orientamento orizzontale e verticale. Considerando, a titolo esemplificativo, un frutto con proiezione circolare di raggio $r$, l'area effettiva del pomodoro è $\pi r^2$, a fronte di un'area del rettangolo circoscritto pari a $(2r)^2 = 4r^2$. Il rapporto tra le due superfici risulta:
+\begin{equation}
+    \frac{\pi r^2}{4 r^2} = \frac{\pi}{4} \approx 0.785
+    \label{eq:rapporto_cerchio_box}
+\end{equation}
+Questo implica che oltre il $21.5\%$ dell'area di ogni bounding box è costituito da spazio vuoto (sfondo, foglie o rami circostanti). Quando i frutti crescono ravvicinati o disposti lungo linee diagonali, i rettangoli di delimitazione finiscono per intersecarsi vistosamente nelle zone angolari prive di frutto.
+Tale sovrapposizione fittizia impedisce una stima fedele del contatto reale: due frutti adiacenti ma perfettamente liberi verrebbero considerati geometricamente sovrapposti solo a causa dell'ingombro degli angoli del rettangolo. Questo limite rende indispensabile superare l'approssimazione rettangolare a favore di una modellazione continua e aderente alla sagoma reale del frutto.
+
+% ==============================================================================
+% ISTRUZIONI PER L'INSERIMENTO DELLA FIGURA 3.1:
+% ------------------------------------------------------------------------------
+% Immagine consigliata (due riquadri affiancati, es. salvata in figures/fig3_1_confronto_bbox_ellisse.png):
+% - Riquadro (a): Due pomodori adiacenti in diagonale con le Bounding Box rettangolari (AABB).
+%   Mostra l'intersezione negli angoli vuoti che inganna l'algoritmo generando una falsa occlusione.
+% - Riquadro (b): Gli stessi due pomodori modellati con le ellissi (Convex Hull + Fit Ellipse),
+%   dove lo spazio vuoto è rimosso e l'intersezione reale risulta nulla (frutti entrambi liberi).
+%
+% Quando hai l'immagine pronta nella cartella figures/, decommenta il blocco seguente:
+%
+% \begin{figure}[htbp]
+%     \centering
+%     \begin{subfigure}[b]{0.48\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figures/fig3_1_confronto_bbox_ellisse_a.png}
+%         \caption{Falso positivo indotto dall'intersezione angolare delle AABB.}
+%         \label{subfig:bbox_overlap}
+%     \end{subfigure}
+%     \hfill
+%     \begin{subfigure}[b]{0.48\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figures/fig3_1_confronto_bbox_ellisse_b.png}
+%         \caption{Modellazione con ellissi orientate: contatto reale e assenza di sovrapposizione spuria.}
+%         \label{subfig:ellisse_overlap}
+%     \end{subfigure}
+%     \caption{Confronto geometrico su grappolo compatto: i limiti delle bounding box assiali (a) e la risoluzione tramite fitting ellittico (b).}
+%     \label{fig:confronto_bbox_ellisse}
+% \end{figure}
+% ==============================================================================
+
+\subsection{Modellazione tramite Convex Hull e Fitting Ellittico}
+\label{subsec:modellazione_ellittica}
+
+Per superare le limitazioni delle bounding box senza ricorrere a calcoli onerosi sulle maschere dense, ciascun pomodoro viene approssimato tramite un'ellisse orientata nel piano immagine. L'ellisse costituisce il compromesso ottimale: racchiude la curvatura del frutto, ne stima le proporzioni assiali e ne individua l'inclinazione, eliminando lo spazio vuoto angolare dei rettangoli.
+Il processo di modellazione geometrica si articola in tre passaggi consecutivi:
+\begin{enumerate}
+    \item \textbf{Estrazione della nuvola di pixel}: a partire dalla maschera binaria $\mathcal{M}_i$, vengono estratte le coordinate di tutti i pixel attivi:
+    \begin{equation}
+        \mathcal{P}_i = \left\{ (u, v) \in \mathbb{N}^2 \mid \mathcal{M}_i(u, v) = 1 \right\}
+    \end{equation}
+    L'estrazione globale delle coordinate (anziché il tracciamento di un singolo contorno) conferisce robustezza nei confronti di eventuali frammentazioni della maschera, ad esempio quando un ramo sottile suddivide la segmentazione di un singolo frutto in più isole disgiunte. Matematicamente, l'identificazione univoca dei parametri di una conica richiede almeno 5 punti non degeneri; la stabilità statistica del fitting viene comunque garantita dal vincolo di area minima ($A_i \ge 1500$ pixel) descritto nella sezione successiva.
+    
+    \item \textbf{Calcolo dell'involucro convesso (\textit{Convex Hull})}: le maschere generate dalla rete possono presentare piccole concavità o irregolarità di bordo causate da ombre, foglie sottili o dal calice. L'algoritmo determina l'involucro convesso $\mathcal{H}_i$ congiungendo i vertici più esterni della nuvola $\mathcal{P}_i$, colmando tali rientranze spurie e regolarizzando la sagoma prima del fitting.
+    
+    \item \textbf{Adattamento dell'ellisse (\textit{Fit Ellipse})}: sui vertici dell'involucro convesso viene applicato l'adattamento algebrico basato sul metodo dei minimi quadrati diretti \cite{fitzgibbon1999direct}. L'algoritmo restituisce una rappresentazione compatta definita da cinque parametri geometrici:
+    \begin{equation}
+        \mathcal{E}_i = \left( (x_{c, i}, y_{c, i}), (d_{\min, i}, d_{\max, i}), \theta_i \right)
+        \label{eq:parametri_ellisse}
+    \end{equation}
+    dove $(x_{c, i}, y_{c, i})$ rappresenta il centroide, $d_{\min, i}$ e $d_{\max, i}$ corrispondono rispettivamente alle lunghezze dell'asse minore e maggiore, e $\theta_i \in [0^\circ, 180^\circ)$ indica l'angolo di inclinazione dell'asse principale rispetto all'orizzontale.
+\end{enumerate}
+
+\paragraph{Rilevanza dell'angolo di inclinazione $\theta$}
+Oltre a delimitare con precisione la sagoma del frutto, il parametro $\theta_i$ riveste un ruolo chiave per l'integrazione robotica: fornisce l'informazione necessaria per orientare la pinza di presa (\textit{gripper}) lungo la direzione naturale di accrescimento del pomodoro, favorendo un prelievo pulito e riducendo le sollecitazioni meccaniche sul peduncolo.
+
+\section{Screening Dimensionale e Metriche di Raggiungibilità}
+\label{sec:screening_geometrico}
+
+Tra le predizioni restituite dal modello possono essere presenti rilevazioni spurie, come falsi positivi generati da riflessi o frammenti di foglie, oppure pomodori sullo sfondo troppo distanti per l'interazione robotica. Per ripulire l'output, la pipeline calcola preliminarmente l'area in pixel $A_i$ di ciascuna maschera sommando tutti i pixel attivi:
+\begin{equation}
+    A_i = \sum_{u=1}^{W} \sum_{v=1}^{H} \mathcal{M}_i(u, v)
+    \label{eq:area_definizione}
+\end{equation}
+Viene quindi imposto un vincolo di ammissibilità dimensionale basato su una soglia minima $A_{\min}$:
+\begin{equation}
+    A_i \ge A_{\min}
+    \label{eq:area_min}
+\end{equation}
+avendo fissato $A_{\min} = 1500$ pixel. Tutti i candidati con area inferiore a tale soglia vengono scartati a monte dell'elaborazione.
+
+La scelta di $A_{\min}$ è stata determinata empiricamente analizzando le immagini acquisite in serra. Dal punto di vista geometrico, per una sagoma approssimativamente circolare, un'area di $1500$ pixel corrisponde a un diametro apparente di circa $44$ pixel. Tale soglia costituisce un compromesso operativo efficace: da un lato elimina le false rilevazioni su frammenti vegetativi e i frutti distanti sullo sfondo, dall'altro evita di escludere pomodori in primo piano parzialmente coperti, assicurando al contempo un numero di pixel sufficiente a rendere stabile il calcolo dell'involucro convesso e dei descrittori di forma.
+
+\subsection{Metriche di Valutazione Geometrica}
+\label{subsec:metriche_geometriche}
+
+I candidati che superano il vincolo di area minima vengono valutati mediante tre indici geometrici adimensionali e normalizzati nell'intervallo $[0, 1]$, ideati per quantificare la raggiungibilità del target da parte del manipolatore robotico:
+
+\paragraph{1. Area Normalizzata ($A_{\text{norm}}$)}
+In ottica prospettica, i frutti più vicini al punto di ripresa e meno coperti da ostacoli occupano una superficie maggiore nel fotogramma. Assumendo come target di riferimento ideale un frutto la cui proiezione copra almeno il $15\%$ della superficie totale dell'immagine ($0.15 \cdot W \cdot H$), l'indice viene calcolato imponendo una funzione di saturazione unitaria:
+\begin{equation}
+    A_{\text{norm}, i} = \min \left( 1.0, \, \frac{A_i}{0.15 \cdot W \cdot H} \right)
+    \label{eq:area_norm}
+\end{equation}
+Target in primo piano con estensione $\ge 15\%$ ottengono il punteggio massimo ($1.0$), mentre rilevazioni più lontane o parzialmente coperte ricevono punteggi proporzionalmente decrescenti.
+
+\paragraph{2. Circolarità ($\Phi$)}
+Un pomodoro isolato e privo di ostacoli presenta una sagoma tondeggiante e compatta, mentre la presenza di rami o peduncoli occludenti ne frammenta la proiezione visibile. Per evitare che le irregolarità del contorno pixelato diretto alterino la stima, il perimetro $P_i$ viene calcolato direttamente sull'involucro convesso $\mathcal{H}_i$ introdotto in precedenza. L'indice di circolarità $\Phi_i$ viene calcolato mediante il descrittore standard di compattezza basato sul rapporto area-perimetro:
+\begin{equation}
+    \Phi_i = \min \left( 1.0, \, \frac{4\pi A_i}{P_i^2} \right)
+    \label{eq:circolarita}
+\end{equation}
+Questa formulazione svolge un ruolo duplice: premia le sagome con profilo circolare e, al contempo, penalizza i frutti parzialmente coperti da rametti sottili, nei quali l'area visibile $A_i$ si riduce a parità di perimetro convesso.
+
+\paragraph{3. Centralità Ottica ($C$)}
+Questo descrittore favorisce i frutti localizzati in prossimità del centro del fotogramma $(W/2, H/2)$, dove le distorsioni ottiche della lente sono minime e il rischio che il frutto sia parzialmente tagliato fuori dall'inquadratura si azzera. Il baricentro $(c_{x, i}, c_{y, i})$ viene ricavato come media aritmetica delle coordinate dei pixel attivi:
+\begin{equation}
+    c_{x, i} = \frac{1}{A_i} \sum_{(u, v) \in \mathcal{M}_i} u, \quad c_{y, i} = \frac{1}{A_i} \sum_{(u, v) \in \mathcal{M}_i} v
+    \label{eq:centroide}
+\end{equation}
+La distanza dal centro viene quindi normalizzata rispetto alla semidiagonale massima del fotogramma $d_{\max} = \sqrt{(W/2)^2 + (H/2)^2}$:
+\begin{equation}
+    C_i = 1.0 - \frac{\sqrt{(c_{x, i} - W/2)^2 + (c_{y, i} - H/2)^2}}{d_{\max}}
+    \label{eq:centralita}
+\end{equation}
+L'indice premia i frutti situati nella zona centrale dell'immagine, dove si riduce il rischio di considerare elementi parzialmente tagliati fuori dai bordi del fotogramma e l'analisi geometrica risulta più robusta.
+
+\subsection{Punteggio Geometrico Combinato}
+\label{subsec:score_combinato}
+
+I tre descrittori geometrici vengono aggregati mediante una combinazione lineare pesata sotto il vincolo di normalizzazione $\sum_k w_k = w_a + w_\phi + w_c = 1.0$, ottenendo lo score geometrico globale $G_i \in [0, 1]$:
+\begin{equation}
+    G_i = w_a A_{\text{norm}, i} + w_\phi \Phi_i + w_c C_i
+    \label{eq:score_geometrico}
+\end{equation}
+I coefficienti di ponderazione adottati sono riportati in Tabella~\ref{tab:pesi_geometrici}.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Pesi assegnati alle caratteristiche geometriche.}
+    \label{tab:pesi_geometrici}
+    \begin{tabular}{lcc p{7.0cm}}
+        \toprule
+        \textbf{Indice} & \textbf{Simbolo} & \textbf{Peso} & \textbf{Motivazione} \\
+        \midrule
+        Area normalizzata   & $w_a$           & $0.45$        & Favorisce i frutti più vicini e con superficie sgombra \\
+        Circolarità         & $w_\phi$        & $0.35$        & Premia sagome integre e non coperte da rami sottili \\
+        Centralità ottica   & $w_c$           & $0.20$        & Favorisce target ben centrati rispetto all'obiettivo \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Il punteggio $G_i$ quantifica l'accessibilità visiva e la regolarità morfologica di ciascuna istanza rilevata. Tuttavia, la sola idoneità geometrica non è sufficiente per definire i target operativi: nei grappoli complessi occorre prima depurare le predizioni dai falsi duplicati e accertare lo stato di maturazione biologica dei frutti.
+
+\section{Deduplicazione, Selezione del Pool e Filtro di Maturità}
+\label{sec:deduplicazione_maturita}
+
+Le rilevazioni fornite dalla rete neurale vengono elaborate attraverso tre stadi di filtraggio e selezione. Il primo stadio elimina le rilevazioni duplicate dello stesso frutto confrontando le maschere di segmentazione. Il secondo stadio ordina i pomodori in base al punteggio geometrico ed estrae un gruppo ristretto di candidati, così da contenere il numero di confronti da effettuare. Il terzo stadio valuta la maturazione di ciascun frutto analizzando la componente cromatica nello spazio HSV, distinguendo i pomodori maturi da quelli ancora verdi.
+
+\subsection{Deduplicazione con Mask-IoU}
+\label{subsec:mask_nms}
+
+Nei grappoli densi, la rete neurale può generare rilevazioni multiple per la medesima istanza fisica. Se non rimossi, duplicati con punteggio geometrico elevato occuperebbero indebitamente posizioni primarie nella graduatoria di raccolta.
+
+Per ovviare a questo problema, le rilevazioni che hanno superato il filtro di area minima vengono ordinate in senso decrescente in base alla confidenza del modello ($c_{(1)} \ge c_{(2)} \ge \dots \ge c_{(N)}$). Scorrendo tale sequenza, ciascuna maschera candidata viene confrontata con quelle già validate mediante l'indice IoU (\textit{Intersection over Union}) calcolato a livello di pixel:
+\begin{equation}
+    \text{IoU}(\mathcal{M}_i, \mathcal{M}_j) = \frac{\sum_{u=1}^{W} \sum_{v=1}^{H} \left( \mathcal{M}_i(u, v) \land \mathcal{M}_j(u, v) \right)}{\sum_{u=1}^{W} \sum_{v=1}^{H} \left( \mathcal{M}_i(u, v) \lor \mathcal{M}_j(u, v) \right)}
+    \label{eq:mask_iou}
+\end{equation}
+Se l'intersezione supera la soglia $\tau_{\text{dedup}} = 0.70$, l'istanza con confidenza minore viene rigettata come duplicato. L'adozione del Mask-IoU è cruciale rispetto alla soppressione dei non massimi basata su riquadri rettangolari: frutti adiacenti e a contatto presentano sovente forti sovrapposizioni a livello di bounding box pur costituendo corpi distinti, che il controllo pixel-wise preserva correttamente.
+
+\subsection{Selezione del Pool di Candidati}
+\label{subsec:selezione_pool}
+
+A valle della deduplicazione, i pomodori rimasti vengono ordinati in senso decrescente secondo lo score geometrico $G_i$. Per contenere i tempi di calcolo ed evitare di analizzare combinazioni inutili sui frutti marginali, la pipeline estrae un gruppo ristretto limitato ai primi $K = 8$ candidati, definito come $\mathcal{P}_{\text{geo}} = \{ \mathcal{D}_{(1)}, \mathcal{D}_{(2)}, \dots, \mathcal{D}_{(K)} \}$. Questa scelta riduce il numero di coppie da verificare nella successiva stima delle occlusioni a un massimo di $K(K-1) = 56$ confronti, mantenendo l'elaborazione rapida e adatta al ciclo di controllo del manipolatore robotico.
+
+\subsection{Analisi del Colore nello Spazio HSV e Indice di Maturità}
+\label{subsec:filtro_hsv}
+
+Un pomodoro facilmente raggiungibile non deve essere raccolto se non ha ancora raggiunto la corretta maturazione commerciale \cite{ahmad2026comparative, xiao2023fruit}. Per rendere il controllo del colore meno sensibile alle ombre e ai riflessi tipici della luce in serra, l'immagine RGB viene convertita nello spazio colore HSV (\textit{Hue, Saturation, Value}), in cui la tinta pura (H) è separata dalla luminosità (V).
+
+Nello spazio HSV di OpenCV, il colore rosso si trova distribuito a cavallo dell'origine della scala ($[0, 180]$). L'intervallo associato al rosso maturo viene quindi definito dall'unione di due intervalli:
+\begin{equation}
+    \mathcal{R}_{\text{red}} = (H \in [0, 15] \cup [165, 180]) \quad \text{con } S \ge 50, \; V \ge 50
+    \label{eq:hsv_rosso}
+\end{equation}
+Mentre la fascia associata al verde dei frutti acerbi è delimitata da:
+\begin{equation}
+    \mathcal{R}_{\text{green}} = (H \in [35, 85]) \quad \text{con } S \ge 40, \; V \ge 40
+    \label{eq:hsv_verde}
+\end{equation}
+Le soglie minime su saturazione e luminosità servono a scartare sia le zone sovraesposte dai riflessi solari sia quelle troppo in ombra. Per ciascuna maschera $\mathcal{M}_i$, si conta quanti pixel ricadono nella fascia del rosso ($N_{\text{red}, i}$) e quanti in quella del verde ($N_{\text{green}, i}$), ricavando l'indice di maturità continuo $M_i \in [0, 1]$:
+\begin{equation}
+    M_i = 
+    \begin{cases}
+        \dfrac{N_{\text{red}, i}}{N_{\text{red}, i} + N_{\text{green}, i}} & \text{se } \left( N_{\text{red}, i} + N_{\text{green}, i} \right) > 0 \\[8pt]
+        0.0 & \text{altrimenti}
+    \end{cases}
+    \label{eq:indice_maturita}
+\end{equation}
+Un pomodoro viene considerato pronto per la raccolta solo se supera la soglia $M_i \ge \tau_{\text{mat}} = 0.50$.
+
+\paragraph{I frutti acerbi come ostacoli statici}
+Un dettaglio fondamentale dell'algoritmo riguarda la gestione dei pomodori acerbi ($M_i < \tau_{\text{mat}}$), che non vengono scartati dalla scena. Se un pomodoro verde si trova posizionato davanti a uno rosso, ne ostruisce fisicamente l'accesso: se il sistema lo ignorasse, il robot tenterebbe di afferrare il frutto maturo andando a urtare quello verde. I pomodori acerbi vengono pertanto mantenuti nel calcolo con il ruolo di \textbf{ostacoli statici non rimovibili}: non possono essere raccolti, ma servono a segnalare che i frutti maturi retrostanti sono bloccati e non possono essere prelevati per primi.
+
+\section{Risoluzione del Depth Ordering e Mappa delle Occlusioni}
+\label{sec:depth_ordering}
+
+Una volta modellate le sagome dei pomodori mediante ellissi orientate, occorre stabilire se tra i candidati del pool vi siano sovrapposizioni e determinare quale frutto si trovi davanti all'altro rispetto alla telecamera.
+Per quantificare la sovrapposizione tra due pomodori $i$ e $j$, l'algoritmo renderizza le rispettive ellissi piene $\mathcal{E}_i$ e $\mathcal{E}_j$ su due immagini binarie temporanee e ne calcola l'intersezione tramite un'operazione AND logica a livello di pixel:
+\begin{equation}
+    \mathcal{I}_{ij} = \mathcal{E}_i \cap \mathcal{E}_j
+    \label{eq:intersezione_ellissi}
+\end{equation}
+Il grado di sovrapposizione viene quindi valutato rispetto all'area dell'ellisse del frutto $i$:
+\begin{equation}
+    \rho_{ij} = \frac{|\mathcal{I}_{ij}|}{|\mathcal{E}_i|}
+    \label{eq:overlap_ratio}
+\end{equation}
+dove $|\cdot|$ indica il conteggio dei pixel attivi. Se questo rapporto supera la soglia minima $\tau_{\text{occ}} = 0.15$ ($15\%$), si conclude che tra i due frutti esiste una sovrapposizione non trascurabile.
+
+Nelle immagini bidimensionali la sola intersezione geometrica non consente di distinguere quale frutto si trovi più vicino all'obiettivo e quale sia retrostante. Per risolvere questo ordinamento in profondità senza ricorrere a sensori 3D, si sfrutta la naturale omogeneità di calibro dei pomodori dello stesso grappolo: il frutto in primo piano conserva quasi integra la propria sagoma, mentre quello retrostante ne mostra solo una porzione parziale.
+In presenza di sovrapposizione ($\rho_{ij} > \tau_{\text{occ}}$), si confrontano quindi le aree delle rispettive maschere binarie ($A_i$ e $A_j$):
+\begin{equation}
+    \text{Se } \rho_{ij} > \tau_{\text{occ}} \quad \text{e} \quad A_i < A_j \implies j \text{ blocca } i
+    \label{eq:regola_occlusione}
+\end{equation}
+Il frutto $j$ viene così registrato come bloccante e l'istanza $i$ viene inserita nel rispettivo insieme dei pomodori occlusi $\mathcal{O}_j$.
+Questa regola si basa sull'ipotesi che i pomodori dello stesso grappolo abbiano dimensioni simili. Pur presentando dei limiti in alcuni casi particolari (ad esempio quando un frutto molto piccolo si trova davanti a uno nettamente più grande), nella maggior parte delle situazioni reali consente di identificare correttamente le relazioni di blocco con un costo computazionale trascurabile.
+
+\section{Algoritmo di Task Planning Dinamico}
+\label{sec:planning_dinamico}
+
+Una volta costruita la mappa delle occlusioni, occorre determinare la sequenza ordinata con cui raccogliere i frutti maturi. In un grappolo fitto, limitarsi a ordinare i bersagli secondo il punteggio geometrico iniziale non è sufficiente: prelevare un pomodoro che si trova davanti ad altri ne modifica immediatamente l'accessibilità visiva e fisica.
+Per simulare questo processo decisionale, l'algoritmo implementa un ciclo iterativo (paradigma \textit{Pick \& Update}) con l'obiettivo di selezionare una sequenza composta da un massimo di $N_{\max} = 3$ bersagli primari.
+
+\subsection{Penalizzazione delle Occlusioni e Punteggio Dinamico}
+\label{subsec:punteggio_dinamico}
+
+A ogni iterazione del ciclo $k \in \{1, \dots, N_{\max}\}$, l'algoritmo prende in considerazione i soli frutti maturi non ancora raccolti, escludendo i pomodori acerbi che continuano a fungere da ostacoli nella scena.
+Per ciascuno di questi candidati, si verifica se nello stato corrente della scena vi siano ancora elementi bloccanti antistanti. Un frutto $i$ viene considerato attualmente occluso se esiste almeno un altro pomodoro $j$ (maturo o acerbo) non ancora raccolto che lo occlude direttamente ($i \in \mathcal{O}_j$). In base a questo controllo, viene assegnato un coefficiente di penalità $p_i^{(k)}$:
+\begin{equation}
+    p_i^{(k)} = 
+    \begin{cases}
+        \gamma_{\text{occ}} = 0.70 & \text{se il frutto } i \text{ è attualmente occluso} \\[6pt]
+        1.0 & \text{se il frutto } i \text{ è libero frontalmente}
+    \end{cases}
+    \label{eq:penalita_occlusione}
+\end{equation}
+Il punteggio decisionale aggiornato $S_i^{(k)}$ viene quindi calcolato combinando lo score geometrico di base, la condizione istantanea di occlusione e l'eventuale moltiplicatore di sblocco $b_i^{(k)}$ maturato nelle iterazioni precedenti:
+\begin{equation}
+    S_i^{(k)} = G_i \times p_i^{(k)} \times b_i^{(k)}
+    \label{eq:score_dinamico}
+\end{equation}
+dove all'inizio del ciclo per tutti i frutti vale $b_i^{(1)} = 1.0$. L'algoritmo ordina quindi i candidati maturi e seleziona come miglior bersaglio del passo corrente quello che massimizza il punteggio finale:
+\begin{equation}
+    d^* = \arg\max_i S_i^{(k)}
+    \label{eq:selezione_best}
+\end{equation}
+Il frutto $d^*$ viene contrassegnato come prelevato e inserito al posto $k$ della sequenza di raccolta.
+
+\subsection{Rimozione Virtuale e Meccanismo di Sblocco}
+\label{subsec:sblocco_dinamico}
+
+Una volta selezionato il miglior bersaglio $d^*$ al passo $k$, l'algoritmo simula la sua rimozione fisica dalla scena per aggiornare le condizioni operative delle iterazioni successive. L'aggiornamento dello stato avviene in due fasi:
+\begin{enumerate}
+    \item \textbf{Aggiornamento dello stato di raccolta}: Il frutto $d^*$ viene contrassegnato come selezionato ed estratto dall'insieme dei candidati disponibili. A partire dall'iterazione successiva, esso non rientra più tra i frutti estraibili e cessa di agire come ostacolo per il resto del grappolo.
+    \item \textbf{Propagazione del bonus di sblocco}: Per ciascun frutto $u$ appartenente all'insieme di quelli direttamente occlusi da $d^*$ ($u \in \mathcal{O}_{d^*}$), il moltiplicatore di sblocco viene impostato al valore premiante:
+    \begin{equation}
+        b_u^{(k+1)} = \beta_{\text{unlock}} = 1.20
+        \label{eq:bonus_unlock}
+    \end{equation}
+\end{enumerate}
+
+All'iterazione successiva $k+1$, l'effetto della rimozione virtuale produce una rilevante riconfigurazione dei punteggi decisionali:
+\begin{itemize}
+    \item Se il frutto $d^*$ era l'unico elemento a coprire frontalmente $u$, quest'ultimo risulterà ora privo di ostacoli attivi nella scena; di conseguenza, la penalità $p_u^{(k+1)}$ salirà da $0.70$ a $1.0$.
+    \item Combinando la rimozione della penalità con il moltiplicatore $b_u^{(k+1)} = 1.20$, il punteggio complessivo del frutto liberato registra un incremento relativo pari a:
+    \begin{equation}
+        \frac{S_u^{(k+1)}}{S_u^{(k)}} = \frac{G_u \times 1.0 \times 1.20}{G_u \times 0.70 \times 1.0} \approx 1.714 \quad (+71.4\%)
+        \label{eq:salto_score}
+    \end{equation}
+    Questo forte incentivo numerico fa sì che i pomodori immediatamente retrostanti a un frutto appena rimosso scalino rapidamente la graduatoria, orientando il pianificatore a disfare il grappolo partendo dagli strati più esterni verso quelli più interni.
+    \item Se invece il frutto $u$ rimane parzialmente occluso da un ulteriore pomodoro non ancora rimosso, la penalità $p_u^{(k+1)} = 0.70$ rimane attiva, ma il bonus $1.20$ ne attenua comunque l'impatto portando il moltiplicatore effettivo da $0.70$ a $0.84$.
+\end{itemize}
+
+Il ciclo decisionale prosegue fino al raggiungimento della lunghezza massima della sequenza di prelievo ($N_{\max} = 3$) oppure fino all'esaurimento dei candidati maturi disponibili.
+
+A scopo comparativo, l'algoritmo calcola contestualmente una sequenza statica di riferimento, ottenuta estraendo i primi $5$ frutti maturi ordinati unicamente in base al punteggio geometrico $G_i$, senza applicare alcuna penalità per le occlusioni né aggiornamenti dinamici di stato. Tale sequenza (\textit{baseline}) fungerà da termine di confronto per quantificare, in sede sperimentale, i vantaggi introdotti dal planning dinamico nella prevenzione delle collisioni.

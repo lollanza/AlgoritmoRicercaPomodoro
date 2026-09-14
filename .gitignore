@@ -38,3 +38,18 @@ output_reachability_nuovi
 output_reachability_circular_nuovi
 compare_nuovi_pomodori.py
 run_testing_dinamico.py
+template/
+
+# --- LaTeX Auxiliary Files ---
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
