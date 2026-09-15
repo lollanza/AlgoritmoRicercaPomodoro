@@ -106,7 +106,7 @@ I pomodori possiedono una sagoma curvilinea, mentre la bounding box è un rettan
     \label{eq:rapporto_cerchio_box}
 \end{equation}
 Questo implica che oltre il $21.5\%$ dell'area di ogni bounding box è costituito da spazio vuoto (sfondo, foglie o rami circostanti). Quando i frutti crescono ravvicinati o disposti lungo linee diagonali, i rettangoli di delimitazione finiscono per intersecarsi vistosamente nelle zone angolari prive di frutto.
-Tale sovrapposizione fittizia impedisce una stima fedele del contatto reale: due frutti adiacenti ma perfettamente liberi verrebbero considerati geometricamente sovrapposti solo a causa dell'ingombro degli angoli del rettangolo, come evidenziato nel confronto di Figura~\ref{fig:confronto_bbox_ellisse}. Questo limite rende indispensabile superare l'approssimazione rettangolare a favore di una modellazione continua e aderente alla sagoma reale del frutto.
+Tale sovrapposizione fittizia impedisce una stima fedele del contatto reale: due frutti adiacenti ma perfettamente liberi verrebbero considerati geometricamente sovrapposti solo a causa dell'ingombro degli angoli del rettangolo, come evidenziato nel confronto di Figura~\ref{fig:confronto_bbox_ellisse}. Questo limite rende indispensabile superare l'approssimazione rettangolare a favore di una modellazione continua e aderente alla sagoma reale del frutto \cite{liu2020yolotomato}.
 
 \begin{figure}[htbp]
     \centering
@@ -130,7 +130,7 @@ Tale sovrapposizione fittizia impedisce una stima fedele del contatto reale: due
 \subsection{Modellazione tramite Convex Hull e Fitting Ellittico}
 \label{subsec:modellazione_ellittica}
 
-Per superare le limitazioni delle bounding box senza ricorrere a calcoli onerosi sulle maschere dense, ciascun pomodoro viene approssimato tramite un'ellisse orientata nel piano immagine. L'ellisse costituisce il compromesso ottimale: racchiude la curvatura del frutto, ne stima le proporzioni assiali e ne individua l'inclinazione, eliminando lo spazio vuoto angolare dei rettangoli.
+Per superare le limitazioni delle bounding box senza ricorrere a calcoli onerosi sulle maschere dense, ciascun pomodoro viene approssimato tramite un'ellisse orientata nel piano immagine. L'ellisse costituisce il compromesso ottimale: racchiude la curvatura del frutto, ne stima le proporzioni assiali e ne individua l'inclinazione, eliminando lo spazio vuoto angolare dei rettangoli \cite{wang2024multifruit}.
 Il processo di modellazione geometrica si articola in tre passaggi consecutivi:
 \begin{enumerate}
     \item \textbf{Estrazione della nuvola di pixel}: a partire dalla maschera binaria $\mathcal{M}_i$, vengono estratte le coordinate di tutti i pixel attivi:
@@ -139,7 +139,7 @@ Il processo di modellazione geometrica si articola in tre passaggi consecutivi:
     \end{equation}
     L'estrazione globale delle coordinate (anziché il tracciamento di un singolo contorno) conferisce robustezza nei confronti di eventuali frammentazioni della maschera, ad esempio quando un ramo sottile suddivide la segmentazione di un singolo frutto in più isole disgiunte. Matematicamente, l'identificazione univoca dei parametri di una conica richiede almeno 5 punti non degeneri; la stabilità statistica del fitting viene comunque garantita dal vincolo di area minima ($A_i \ge 1500$ pixel) descritto nella sezione successiva.
     
-    \item \textbf{Calcolo dell'involucro convesso (\textit{Convex Hull})}: le maschere generate dalla rete possono presentare piccole concavità o irregolarità di bordo causate da ombre, foglie sottili o dal calice. L'algoritmo determina l'involucro convesso $\mathcal{H}_i$ congiungendo i vertici più esterni della nuvola $\mathcal{P}_i$, colmando tali rientranze spurie e regolarizzando la sagoma prima del fitting.
+    \item \textbf{Calcolo dell'involucro convesso (\textit{Convex Hull})}: le maschere generate dalla rete possono presentare piccole concavità o irregolarità di bordo causate da ombre, foglie sottili o dal calice. L'algoritmo determina l'involucro convesso $\mathcal{H}_i$ congiungendo i vertici più esterni della nuvola $\mathcal{P}_i$, colmando tali rientranze spurie e regolarizzando la sagoma prima del fitting \cite{changhui2017reconstruction}.
     
     \item \textbf{Adattamento dell'ellisse (\textit{Fit Ellipse})}: sui vertici dell'involucro convesso viene applicato l'adattamento algebrico basato sul metodo dei minimi quadrati diretti \cite{fitzgibbon1999direct}. L'algoritmo restituisce una rappresentazione compatta definita da cinque parametri geometrici:
     \begin{equation}
@@ -183,7 +183,7 @@ In ottica prospettica, i frutti più vicini al punto di ripresa e meno coperti d
 Target in primo piano con estensione $\ge 15\%$ ottengono il punteggio massimo ($1.0$), mentre rilevazioni più lontane o parzialmente coperte ricevono punteggi proporzionalmente decrescenti.
 
 \paragraph{2. Circolarità ($\Phi$)}
-Un pomodoro isolato e privo di ostacoli presenta una sagoma tondeggiante e compatta, mentre la presenza di rami o peduncoli occludenti ne frammenta la proiezione visibile. Per evitare che le irregolarità del contorno pixelato diretto alterino la stima, il perimetro $P_i$ viene calcolato direttamente sull'involucro convesso $\mathcal{H}_i$ introdotto in precedenza. L'indice di circolarità $\Phi_i$ viene calcolato mediante il descrittore standard di compattezza basato sul rapporto area-perimetro:
+Un pomodoro isolato e privo di ostacoli presenta una sagoma tondeggiante e compatta, mentre la presenza di rami o peduncoli occludenti ne frammenta la proiezione visibile. Per evitare che le irregolarità e le concavità del contorno pixelato diretto alterino la stima, il perimetro $P_i$ viene calcolato direttamente sull'involucro convesso $\mathcal{H}_i$ introdotto in precedenza, preservando la consistenza geometrica del descrittore di forma anche in presenza di elementi occludenti lineari \cite{zunic2004convexity}. L'indice di circolarità $\Phi_i$ viene calcolato mediante il descrittore standard di compattezza basato sul rapporto area-perimetro:
 \begin{equation}
     \Phi_i = \min \left( 1.0, \, \frac{4\pi A_i}{P_i^2} \right)
     \label{eq:circolarita}
