@@ -10,6 +10,83 @@ L'architettura proposta si articola in quattro fasi consecutive:
     \item \textbf{Depth ordering e task planning}: stima delle occlusioni mutue tramite sovrapposizione tra ellissi e determinazione iterativa della sequenza di prelievo (\textit{Pick \& Update}).
 \end{enumerate}
 
+La struttura complessiva della pipeline decisionale e l'interazione tra i singoli moduli computazionali sono illustrate nel diagramma a blocchi di Figura~\ref{fig:pipeline_schema}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    every node/.style={font=\small},
+    block/.style={
+        rectangle, draw=black!70, line width=0.6pt,
+        text width=11cm, minimum height=2.2cm,
+        align=left, inner sep=8pt, rounded corners=2pt
+    },
+    io/.style={
+        rounded rectangle, draw=black!60, line width=0.5pt,
+        text width=6cm, minimum height=0.8cm,
+        align=center, inner sep=5pt, fill=gray!8
+    },
+    label/.style={
+        font=\footnotesize\itshape, text=black!60
+    },
+    arrow/.style={
+        -{Stealth[length=3mm]}, line width=0.7pt, black!70
+    }
+]
+
+% Input
+\node[io] (input) {Immagine RGB};
+
+% YOLOv11
+\node[io, below=0.5cm of input, text width=8cm] (yolo)
+    {YOLOv11-seg $\longrightarrow$ Maschere $\mathcal{M}_i$, Confidenza $c_i$};
+
+% Phase 1
+\node[block, below=0.5cm of yolo, fill=blue!6] (fase1)
+    {\textbf{Fase 1 --- Modellazione Geometrica e Screening}\\[3pt]
+     \textbullet\ Convex Hull $\mathcal{H}_i$ $\rightarrow$ Fit Ellisse $\mathcal{E}_i$\\
+     \textbullet\ Screening dimensionale: $A_i \ge 1500$ px\\
+     \textbullet\ Score geometrico $G_i$ ($A_{\text{norm}}$, $\Phi$, $C$)};
+
+% Phase 2
+\node[block, below=0.6cm of fase1, fill=green!6] (fase2)
+    {\textbf{Fase 2 --- Deduplicazione e Filtro di Maturità}\\[3pt]
+     \textbullet\ Mask-IoU dedup ($\tau_{\text{dedup}} = 0.70$)\\
+     \textbullet\ Analisi HSV $\rightarrow$ Indice di maturità $M_i$\\
+     \textbullet\ Soglia: $M_i \ge 0.50$ (maturo) --- altrimenti ostacolo statico};
+
+% Phase 3
+\node[block, below=0.6cm of fase2, fill=orange!8] (fase3)
+    {\textbf{Fase 3 --- Depth Ordering e Mappa delle Occlusioni}\\[3pt]
+     \textbullet\ Intersezione tra ellissi: $\rho_{ij} > \tau_{\text{occ}} = 0.15$\\
+     \textbullet\ Regola di profondità: $A_i < A_j \implies j$ blocca $i$\\
+     \textbullet\ Costruzione dell'insieme $\mathcal{O}_j$ (frutti occlusi da $j$)};
+
+% Phase 4
+\node[block, below=0.6cm of fase3, fill=red!6] (fase4)
+    {\textbf{Fase 4 --- Task Planning Dinamico (\textit{Pick \& Update})}\\[3pt]
+     \textbullet\ Selezione iterativa: $N_{\max} = 3$ bersagli\\
+     \textbullet\ Penalità occlusione: $\gamma_{\text{occ}} = 0.70$\\
+     \textbullet\ Bonus di sblocco: $\beta_{\text{unlock}} = 1.20$};
+
+% Output
+\node[io, below=0.5cm of fase4, text width=8cm] (output)
+    {Sequenza di Raccolta: Rank~1, Rank~2, Rank~3};
+
+% Arrows
+\draw[arrow] (input)  -- (yolo);
+\draw[arrow] (yolo)   -- (fase1);
+\draw[arrow] (fase1)  -- node[label, right, xshift=2pt] {Pool top-$K$ candidati} (fase2);
+\draw[arrow] (fase2)  -- node[label, right, xshift=2pt] {Maturi $+$ Acerbi (ostacoli)} (fase3);
+\draw[arrow] (fase3)  -- node[label, right, xshift=2pt] {Grafo delle dipendenze} (fase4);
+\draw[arrow] (fase4)  -- (output);
+
+\end{tikzpicture}
+\caption{Schema a blocchi della pipeline decisionale: dall'immagine RGB acquisita in serra alla sequenza ordinata di raccolta per il manipolatore robotico.}
+\label{fig:pipeline_schema}
+\end{figure}
+
 \section{Limiti delle Bounding Box e Modellazione Ellittica con Convex Hull}
 \label{sec:modellazione_geometrica}
 
@@ -29,38 +106,26 @@ I pomodori possiedono una sagoma curvilinea, mentre la bounding box è un rettan
     \label{eq:rapporto_cerchio_box}
 \end{equation}
 Questo implica che oltre il $21.5\%$ dell'area di ogni bounding box è costituito da spazio vuoto (sfondo, foglie o rami circostanti). Quando i frutti crescono ravvicinati o disposti lungo linee diagonali, i rettangoli di delimitazione finiscono per intersecarsi vistosamente nelle zone angolari prive di frutto.
-Tale sovrapposizione fittizia impedisce una stima fedele del contatto reale: due frutti adiacenti ma perfettamente liberi verrebbero considerati geometricamente sovrapposti solo a causa dell'ingombro degli angoli del rettangolo. Questo limite rende indispensabile superare l'approssimazione rettangolare a favore di una modellazione continua e aderente alla sagoma reale del frutto.
+Tale sovrapposizione fittizia impedisce una stima fedele del contatto reale: due frutti adiacenti ma perfettamente liberi verrebbero considerati geometricamente sovrapposti solo a causa dell'ingombro degli angoli del rettangolo, come evidenziato nel confronto di Figura~\ref{fig:confronto_bbox_ellisse}. Questo limite rende indispensabile superare l'approssimazione rettangolare a favore di una modellazione continua e aderente alla sagoma reale del frutto.
 
-% ==============================================================================
-% ISTRUZIONI PER L'INSERIMENTO DELLA FIGURA 3.1:
-% ------------------------------------------------------------------------------
-% Immagine consigliata (due riquadri affiancati, es. salvata in figures/fig3_1_confronto_bbox_ellisse.png):
-% - Riquadro (a): Due pomodori adiacenti in diagonale con le Bounding Box rettangolari (AABB).
-%   Mostra l'intersezione negli angoli vuoti che inganna l'algoritmo generando una falsa occlusione.
-% - Riquadro (b): Gli stessi due pomodori modellati con le ellissi (Convex Hull + Fit Ellipse),
-%   dove lo spazio vuoto è rimosso e l'intersezione reale risulta nulla (frutti entrambi liberi).
-%
-% Quando hai l'immagine pronta nella cartella figures/, decommenta il blocco seguente:
-%
-% \begin{figure}[htbp]
-%     \centering
-%     \begin{subfigure}[b]{0.48\textwidth}
-%         \centering
-%         \includegraphics[width=\textwidth]{figures/fig3_1_confronto_bbox_ellisse_a.png}
-%         \caption{Falso positivo indotto dall'intersezione angolare delle AABB.}
-%         \label{subfig:bbox_overlap}
-%     \end{subfigure}
-%     \hfill
-%     \begin{subfigure}[b]{0.48\textwidth}
-%         \centering
-%         \includegraphics[width=\textwidth]{figures/fig3_1_confronto_bbox_ellisse_b.png}
-%         \caption{Modellazione con ellissi orientate: contatto reale e assenza di sovrapposizione spuria.}
-%         \label{subfig:ellisse_overlap}
-%     \end{subfigure}
-%     \caption{Confronto geometrico su grappolo compatto: i limiti delle bounding box assiali (a) e la risoluzione tramite fitting ellittico (b).}
-%     \label{fig:confronto_bbox_ellisse}
-% \end{figure}
-% ==============================================================================
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/fig3_1_confronto_bbox_ellisse_a.png}
+        \caption{Falso positivo indotto dall'intersezione angolare delle AABB.}
+        \label{subfig:bbox_overlap}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/fig3_1_confronto_bbox_ellisse_b.png}
+        \caption{Modellazione con ellissi orientate: contatto reale e assenza di sovrapposizione spuria.}
+        \label{subfig:ellisse_overlap}
+    \end{subfigure}
+    \caption{Confronto geometrico su frutti adiacenti in diagonale: i limiti delle bounding box assiali (a) e la risoluzione tramite fitting ellittico (b).}
+    \label{fig:confronto_bbox_ellisse}
+\end{figure}
 
 \subsection{Modellazione tramite Convex Hull e Fitting Ellittico}
 \label{subsec:modellazione_ellittica}
