@@ -7,8 +7,11 @@ venv/
 runs/
 # Escludi il dataset (troppo pesante per GitHub)
 datasetAggiornato/
-
-
+confronto_*
+visualizza_*
+tesiSeabox.docx
+tesi/immagini
+tesi/figures
 
 
 
@@ -42,7 +45,7 @@ template/
 tesi/selezione_immagini_cap3.md
 revisione_cap3_punto2_e_paper.md
 revisione_cap3_aggiornamento.md
-
+conforno_visivo/
 # --- LaTeX Auxiliary Files ---
 *.aux
 *.bbl

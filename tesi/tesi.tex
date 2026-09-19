@@ -1,17 +1,52 @@
-\documentclass[12pt,a4paper]{report}
+\documentclass[12pt]{report}
 
-% --- Codifica e Lingua ---
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+% --- Selezione Lingua ---
 \usepackage[italian]{babel}
 
-% --- Layout e Geometria ---
-\usepackage[top=3cm, bottom=3cm, left=3.5cm, right=2.5cm]{geometry}
-\usepackage{microtype}
-\usepackage{setspace}
-\onehalfspacing
+% --- Stile Tesi Ufficiale Dipartimento di Informatica (UniMi) ---
+\usepackage{tesi}
+% Per usare il font standard di LaTeX al posto di Libertine, decommentare:
+% \usepackage[defaultfont]{tesi}
 
-% --- Intestazioni di Pagina ---
+% =============================================================================
+% INFORMAZIONI SULLA TESI (Template UniMi)
+% =============================================================================
+
+% --- Università e Dipartimento ---
+\university{Università degli Studi di Milano}
+\unilogo{immagini/loghi/unimi}
+\faculty{Facoltà di Scienze e Tecnologie}
+\department{Dipartimento di Informatica\\Giovanni Degli Antoni}
+\cdl{Corso di Laurea Triennale in Informatica}
+
+% --- Titolo Tesi ---
+\title{Sviluppo di approcci di active visione per la Gestione delle Occlusioni nella Raccolta Robotizzata di Pomodori}
+\printedtitle{Sviluppo di approcci di active visione per la Gestione delle Occlusioni nella Raccolta Robotizzata di Pomodori}
+
+% --- Autore e Candidato ---
+\author{Lorenzo Arienti}
+\matricola{[Matricola]}
+\typeofthesis{Elaborato Finale}
+
+% --- Relatore e Correlatore ---
+\relatore{Prof. [Nome Relatore]}
+\correlatore{Dott. [Nome Correlatore]}
+
+% --- Anno Accademico ---
+% Specificare l'anno di inizio della coorte (es. 2024 produrrà "2024-2025")
+\academicyear{2024}
+
+% --- Configurazione Indici e Front Matter ---
+\figurespagetrue     % Genera Elenco delle Figure
+\tablespagetrue      % Genera Elenco delle Tabelle
+\prefaceintoctrue    % Inserisce Sommario e Ringraziamenti nell'Indice
+\tocintoctrue        % Inserisce la voce "Indice" nell'Indice stesso
+
+% =============================================================================
+% PACCHETTI AUSILIARI E CONFIGURAZIONE
+% =============================================================================
+
+% --- Intestazioni di Pagina Fancyhdr ---
 \usepackage{fancyhdr}
 \pagestyle{fancy}
 \fancyhf{}
@@ -26,22 +61,22 @@
   \renewcommand{\headrulewidth}{0pt}%
 }
 
-% --- Matematica e Simboli ---
+% --- Matematica e Notazione Vettoriale ---
+\let\Bbbk\relax
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{bm}
 
 % --- Tabelle e Figure ---
 \usepackage{booktabs}
-\usepackage{graphicx}
 \usepackage{caption}
 \usepackage{subcaption}
-\graphicspath{{figures/}}
+\graphicspath{{figures/}{immagini/}}
 
 % --- Grafica Vettoriale TikZ ---
 \usepackage{tikz}
 \usetikzlibrary{positioning, arrows.meta, shapes.geometric, shapes.misc}
 
-% --- Algoritmi e Codice ---
+% --- Algoritmi e Pseudocodice ---
 \usepackage[ruled,vlined,linesnumbered,italiano]{algorithm2e}
 
 % --- Riferimenti e Bibliografia ---
@@ -49,32 +84,60 @@
 \usepackage[backend=biber,style=ieee]{biblatex}
 \addbibresource{bibliografia.bib}
 
-% Inserimento del riferimento a piè di pagina ad ogni utilizzo
+% Riferimento bibliografico completo a piè di pagina ad ogni occorrenza
 \let\oldcite\cite
 \renewcommand{\cite}[1]{\oldcite{#1}\footnote{\fullcite{#1}}}
 
-\usepackage[hidelinks]{hyperref}
 \usepackage{cleveref}
 
+% =============================================================================
+% INIZIO DOCUMENTO
+% =============================================================================
 \begin{document}
 
-% --- Indice ---
-\pagenumbering{roman}
-\setcounter{tocdepth}{2}
-\tableofcontents
-\newpage
+% Disattivazione anchor hyperref per le pagine prive di numerazione (elimina warning duplicati)
+\hypersetup{pageanchor=false}
 
-\pagenumbering{arabic}
+% --- Frontespizio Ufficiale UniMi ---
+\makefrontpage
 
-% --- Capitoli ---
+\clearpage
+
+% --- Inizio Front Matter (Numerazione Romana) ---
+\hypersetup{pageanchor=true}
+\beforepreface
+
+% --- Sommario / Abstract ---
+\prefacesection{Sommario}
+
+
+% --- Ringraziamenti ---
+\prefacesection{Ringraziamenti}
+
+% --- Generazione Automatica di TOC, LOT, LOF e Switch a Numeri Arabi ---
+\afterpreface
+\pagestyle{fancy}
+
+% =============================================================================
+% CORPO DELLA TESI (Capitoli)
+% =============================================================================
 \include{chapters/cap1_introduzione}
 \include{chapters/cap2_stato_arte}
 \include{chapters/cap3_metodologia}
 \include{chapters/cap4_validazione}
 \include{chapters/conclusioni}
 
-% --- Bibliografia ---
+% =============================================================================
+% IMPAGINAZIONE FINALE (Bibliografia e Chiusura)
+% =============================================================================
+\beforebibliography
 \nocite{*}
 \printbibliography[title=Bibliografia]
+
+% --- Pagina di Chiusura Laboratorio (Opzionale da Template) ---
+% Se si intende includere la pagina di attestazione del laboratorio/tirocinio,
+% decommentare la linea corrispondente al laboratorio o configurare i comandi sottostanti:
+% \aislab
+% \closingpage
 
 \end{document}

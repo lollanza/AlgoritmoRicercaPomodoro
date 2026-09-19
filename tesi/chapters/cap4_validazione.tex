@@ -1,9 +1,117 @@
 \chapter{Validazione Sperimentale e Discussione}
 \label{chap:validazione}
 
-\section{Configurazione di Test e Dataset}
+In questo capitolo vengono analizzati i risultati ottenuti testando la pipeline
+decisionale proposta nel Capitolo~\ref{chap:metodologia}. L'obiettivo 
+principale è verificare se la modellazione geometrica con ellissi e la logica 
+di pianificazione dinamica migliorino effettivamente la scelta della sequenza 
+di raccolta rispetto ai metodi basati su \textit{bounding box}.
+
+L’indagine sperimentale si sviluppa secondo un percorso analitico progressivo. 
+In primo luogo, vengono formalizzate le condizioni al contorno del banco di 
+prova, definendoi criteri di selezione del dataset di test in ambiente di 
+serra, la configurazione operativa del modello di visione a monte e il quadro 
+completo dei parametri che governano la pipeline. Su queste basi, l’efficacia 
+della modellazione ellittica viene valutata mediante un benchmark comparativo 
+a tre vie, misurandone le divergenze e il grado di concordanza rispetto 
+all’approccio convenzionale a riquadri rigidi e alle scelte di riferimento 
+annotate da operatori umani. Il capitolo si conclude infine con una 
+discussione dei casi di studio più rappresentativi, esaminando in 
+dettaglio le dinamiche di sblocco delle occlusioni, i fattori che garantiscono 
+la stabilità delle decisioni e i limiti operativi emersi nelle condizioni 
+reali di acquisizione.
+
+\section{Configurazione Sperimentale e Dataset di Test}
 \label{sec:setup_sperimentale}
-% Descrizione delle acquisizioni in serra e delle condizioni di eterogeneità di risoluzione.
+
+La correttezza della pianificazione dipende direttamente dalla qualità 
+delle maschere fornite dal modello di visione. Contorni rumorosi o 
+frammentati alterano il calcolo dell'involucro convesso e dell'ellisse 
+associata a ciascun frutto, inducendo stime errate delle occlusioni 
+tra pomodori adiacenti. Definire con rigore le condizioni di acquisizione, 
+la risoluzione di inferenza e le soglie geometriche costituisce quindi 
+il presupposto necessario per isolare l'efficacia del planner e 
+garantirne la riproducibilità.
+
+
+\subsection{Dataset e Immagini di Test}
+\label{subsec:dataset}
+
+La sperimentazione è stata condotta a partire da un dataset acquisito in 
+ambiente di serra, composto complessivamente da $1803$ immagini con 
+risoluzione nativa di $432 \times 432$ pixel. Il set è suddiviso nella 
+canonica partizione di addestramento ($1572$ immagini), validazione 
+($153$ immagini) e test ($78$ immagini). Le annotazioni poligonali 
+comprendono quattro classi: frutti (\textit{tomato}), fusto principale 
+(\textit{MainStem}), peduncoli (\textit{peduncle}) e piccioli 
+(\textit{petiole}). Ai fini della raccolta, la pipeline sviluppata elabora 
+esclusivamente le maschere appartenenti alla classe \textit{tomato}.
+
+Per la validazione della pipeline decisionale e del task planning, è stato 
+selezionato un sottoinsieme mirato di $49$ immagini. Questi fotogrammi sono 
+stati scelti specificamente per la presenza di grappoli densi con marcate 
+occlusioni reciproche, sovrapposizioni parziali e ombreggiature fogliari, 
+costituendo il banco di prova ideale per verificare e confrontare l'efficacia 
+delle diverse strategie di prelievo.
+
+
+\subsection{Configurazione del Modulo Percettivo (YOLOv11-seg)}
+\label{subsec:modulo_percettivo}
+
+La segmentazione delle istanze costituisce il primo stadio della pipeline decisionale. 
+Tra le molteplici architetture e configurazioni sperimentate nelle attività di 
+laboratorio~\cite{collega_yolo}, per la presente ricerca è stato selezionato il modello 
+\textbf{YOLO11-x} (Extra-Large) impostato a una risoluzione di inferenza 
+$\text{imgsz} = 800$ pixel.
+
+La scelta di questa configurazione risponde a precise necessità geometriche:
+\begin{itemize}
+    \item Il calcolo dell'involucro convesso (\textit{Convex Hull}) e il fitting dell'ellisse 
+    operano direttamente sui pixel della maschera. Contorni frammentati o discontinui 
+    alterano la stima dei semiassi e dell'orientamento angolare $\theta_i$, compromettendo 
+    la successiva analisi delle occlusioni.
+    \item Tra i modelli validati, la variante YOLO11-x ha evidenziato la massima fedeltà 
+    di segmentazione ($\text{mAP@50-95} = 40.8\%$, con una precisione del $79.0\%$), 
+    garantendo bordi compatti e una delineazione affidabile anche nei grappoli complessi.
+\end{itemize}
+La soglia di confidenza è stata fissata a $\text{conf} = 0.30$, privilegiando la sensibilità 
+del rilevamento sui frutti parzialmente occlusi e demandando alle successive fasi 
+geometriche l'eliminazione dei falsi positivi.
+
+\subsection{Ambiente di Esecuzione e Parametri Operativi}
+\label{subsec:parametri_operativi}
+
+Tutti i moduli dell'algoritmo sono stati implementati in linguaggio Python~3.12, 
+sfruttando le librerie PyTorch per l'inferenza del modello di deep learning e 
+OpenCV per le primitive algebriche e geometriche (Convex Hull, fitting ellittico, 
+trasformazioni nello spazio colore HSV e operazioni morfologiche binarie).
+
+A fini di tracciabilità e riproducibilità sperimentale, in 
+Tabella~\ref{tab:iperparametri_pipeline} vengono riepilogati tutti i parametri 
+operativi fissati per i test della pipeline decisionale, coerentemente con le 
+formulazioni matematiche dedotte nel Capitolo~\ref{chap:metodologia}.
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \setlength{\tabcolsep}{5pt}
+    \caption{Riepilogo dei parametri e delle soglie operative della pipeline decisionale.}
+    \label{tab:iperparametri_pipeline}
+    \begin{tabular}{lll p{6.0cm}}
+        \toprule
+        \textbf{Parametro} & \textbf{Simbolo} & \textbf{Valore} & \textbf{Ruolo Operativo} \\
+        \midrule
+        Area minima ammissibile & $A_{\min}$ & $1500$ px & Esclusione preliminare di falsi positivi e sfondo \\
+        Soglia di deduplicazione & $\tau_{\text{dedup}}$ & $0.70$ & Mask-IoU per l'eliminazione di predizioni duplicate \\
+        Dimensione del pool & $K$ & $8$ & Numero massimo di candidati ammessi alla Fase 3 \\
+        Soglia di maturità & $\tau_{\text{mat}}$ & $0.50$ & Indice HSV $M_i$: discrimina maturi da ostacoli acerbi \\
+        Soglia di occlusione & $\tau_{\text{occ}}$ & $0.15$ & Rapporto di overlap tra ellissi $\rho_{ij}$ per contatto \\
+        Penalità di occlusione & $\gamma_{\text{occ}}$ & $0.70$ & Fattore applicato a frutti frontalmente occlusi \\
+        Bonus di sblocco & $\beta_{\text{unlock}}$ & $1.20$ & Moltiplicatore assegnato a frutti liberati da un prelievo \\
+        Lunghezza sequenza & $N_{\max}$ & $3$ & Numero di target pianificati per ciclo di picking \\
+        \bottomrule
+    \end{tabular}
+\end{table}
 
 \section{Analisi Comparativa delle Strategie di Picking}
 \label{sec:analisi_comparativa}
