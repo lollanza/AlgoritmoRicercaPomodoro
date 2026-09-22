@@ -161,16 +161,82 @@ la seguente distribuzione dei comportamenti decisionali:
     totalmente occlusi.
 \end{itemize}
 
-Nel confronto diretto con il Ground Truth umano condotto sulle $21$ scene 
-di riferimento, entrambi i metodi evidenziano un tasso di concordanza sul 
-primo bersaglio (Rank~1) pari all'$81.0\%$ ($17$ scene su $21$). Tuttavia, 
-l'analisi disaggregata dimostra che le due strategie operano scelte 
-profondamente differenti nei contesti critici: l'approccio ellittico corregge 
-errori sostanziali della baseline in presenza di grappoli densi (come nel caso 
-di Figura~\ref{fig:confronto_trittico}, in cui il riquadro rigido tentava il 
-prelievo di un frutto occluso), mentre differisce dall'annotazione umana solo 
-in presenza di lievi asimmetrie nelle maschere di segmentazione o di 
-ambiguità prospettiche tra frutti complanari.
+Per valutare la bontà delle decisioni prese dall'algoritmo, si è confrontata 
+la sequenza calcolata con quella annotata manualmente dagli operatori sulle 
+$21$ scene ad alta densità. La Tabella~\ref{tab:benchmark_ground_truth} 
+riassume la percentuale di concordanza con il riferimento umano per ciascuna 
+delle tre posizioni della sequenza di raccolta ($N_{\max} = 3$).
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \caption{Tasso di concordanza con il Ground Truth umano lungo la sequenza 
+    di raccolta.}
+    \label{tab:benchmark_ground_truth}
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Posizione Target} & \textbf{Scene Valutate} & 
+        \textbf{Baseline BBox} & \textbf{Planner Ellittico} & 
+        \textbf{Variazione ($\Delta$)} \\
+        \midrule
+        Rank 1 & 21 & 17 / 21 (81.0\%) & 17 / 21 (81.0\%) & $+0.0\%$ \\
+        Rank 2 & 13 & 5 / 13 (38.5\%)  & 6 / 13 (46.2\%)  & $+7.7\%$ \\
+        Rank 3 & 10 & 2 / 10 (20.0\%)  & 4 / 10 (40.0\%)  & $+20.0\%$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Sul primo frutto da raccogliere (Rank~1), entrambi i metodi ottengono lo 
+stesso risultato complessivo, pari all'$81.0\%$ ($17$ scelte concordi su $21$). 
+Andando però a esaminare le singole immagini, si notano delle differenze:
+\begin{itemize}
+    \item In $19$ scene su $21$ ($90.5\%$), la baseline e il planner ellittico 
+    scelgono lo stesso identico frutto. In $16$ di questi casi la decisione 
+    coincide con quella umana, mentre nelle restanti $3$ scene entrambi i metodi 
+    scelgono un pomodoro diverso rispetto all'operatore. Come illustrato nel caso 
+    di Figura~\ref{fig:soggettivita_gt}, in queste scene i frutti appartengono 
+    allo stesso gruppo: l'algoritmo assegna il Rank~1 al pomodoro in alto 
+    ($G = 0.533$) poiché risulta più isolato e centrale nel fotogramma, 
+    mentre l'operatore umano ha preferito iniziare la raccolta dal frutto grande 
+    in basso ($H_1$). Questa divergenza riflette la naturale soggettività 
+    dell'annotatore umano rispetto al calcolo deterministico del punteggio geometrico.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig4_soggettivita_gt.jpg}
+    \caption[Confronto tra preferenza umana e ottimizzazione geometrica]
+    {Esempio di divergenza tra annotazione umana e punteggio geometrico: 
+    (a)~Ground Truth umano ($H_1, H_2, H_3$), che avvia la raccolta dal frutto 
+    grande inferiore; (b)~Baseline a bounding box ($C_1, C_2, C_3$) e (c)~Planner 
+    ellittico ($E_1, E_2, E_3$), che assegnano entrambi il Rank~1 al pomodoro 
+    superiore isolato in virtù del maggiore punteggio geometrico ($G = 0.533$ 
+    contro $0.490$).}
+    \label{fig:soggettivita_gt}
+\end{figure}
+
+\begin{itemize}
+    \item Nelle altre $2$ scene i due metodi prendono strade diverse. In 
+    particolare, nel caso mostrato in Figura~\ref{fig:confronto_trittico}, la 
+    bounding box seleziona per errore un frutto centrale coperto ($C_1$), 
+    mentre l'ellisse individua correttamente il frutto libero sulla destra ($E_1$), 
+    allineandosi con l'operatore umano ($H_1$). Nella seconda scena, al contrario, 
+    è la baseline a coincidere con l'umano, mentre il nostro metodo sceglie un 
+    frutto adiacente con un'area visibile leggermente maggiore.
+\end{itemize}
+
+Il vero vantaggio delle ellissi si osserva sulle scelte successive (Rank~2 e 
+Rank~3). Man mano che la raccolta procede, la rimozione virtuale del primo 
+pomodoro libera spazio e attiva il bonus di sblocco $\beta_{\text{unlock}}$ per i 
+frutti retrostanti. Con i riquadri rigidi (BBox), gli angoli delle scatole 
+continuano a sovrapporsi anche quando i frutti non si toccano, introducendo 
+false occlusioni; di conseguenza, la concordanza con l'umano cala rapidamente 
+al $38.5\%$ sul Rank~2 e al $20.0\%$ sul Rank~3. Con le ellissi, invece, la forma 
+curva del pomodoro viene approssimata meglio: la concordanza resta al $46.2\%$ 
+sul secondo frutto e raggiunge il $40.0\%$ sul terzo, raddoppiando il valore della 
+baseline. Questo conferma che l'uso delle ellissi e l'aggiornamento dinamico delle 
+occlusioni servono soprattutto a pianificare bene l'intera sequenza di prelievo, 
+evitando errori a catena dopo la prima presa.
 
 
 \subsection{Origine Geometrica delle Divergenze}
