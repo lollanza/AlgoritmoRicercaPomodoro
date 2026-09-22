@@ -51,24 +51,17 @@ delle diverse strategie di prelievo.
 \label{subsec:modulo_percettivo}
 
 La segmentazione delle istanze costituisce il primo stadio della pipeline decisionale. 
-Tra le molteplici architetture e configurazioni sperimentate nelle attività di 
-laboratorio~\cite{collega_yolo}, per la presente ricerca è stato selezionato il modello 
-\textbf{YOLO11-x} (Extra-Large) impostato a una risoluzione di inferenza 
-$\text{imgsz} = 800$ pixel.
+In questo lavoro si è scelto di utilizzare il modello \textbf{YOLO11-x} (Extra-Large) 
+con risoluzione di inferenza a $\text{imgsz} = 800$ pixel, configurazione già ottimizzata 
+e convalidata nelle precedenti attività di laboratorio~\cite{collega_yolo} con un 
+$\text{mAP@50-95}$ del $40.8\%$ e una precisione del $79.0\%$.
 
-La scelta di questa configurazione risponde a precise necessità geometriche:
-\begin{itemize}
-    \item Il calcolo dell'involucro convesso (\textit{Convex Hull}) e il fitting dell'ellisse 
-    operano direttamente sui pixel della maschera. Contorni frammentati o discontinui 
-    alterano la stima dei semiassi e dell'orientamento angolare $\theta_i$, compromettendo 
-    la successiva analisi delle occlusioni.
-    \item Tra i modelli validati, la variante YOLO11-x ha evidenziato la massima fedeltà 
-    di segmentazione ($\text{mAP@50-95} = 40.8\%$, con una precisione del $79.0\%$), 
-    garantendo bordi compatti e una delineazione affidabile anche nei grappoli complessi.
-\end{itemize}
-La soglia di confidenza è stata fissata a $\text{conf} = 0.30$, privilegiando la sensibilità 
-del rilevamento sui frutti parzialmente occlusi e demandando alle successive fasi 
-geometriche l'eliminazione dei falsi positivi.
+Il presente lavoro si concentra infatti sulla fase successiva al rilevamento: partendo 
+dalle maschere binarie fornite dalla rete, l'obiettivo è determinare una sequenza di 
+raccolta ordinata, efficiente e priva di collisioni. Per questo motivo la soglia di 
+confidenza è stata mantenuta a $\text{conf} = 0.30$, così da massimizzare la sensibilità 
+del modello anche sui pomodori parzialmente nascosti e lasciare alle successive fasi 
+geometriche il compito di filtrare le maschere non affidabili.
 
 \subsection{Ambiente di Esecuzione e Parametri Operativi}
 \label{subsec:parametri_operativi}
@@ -261,12 +254,14 @@ intrinseci alla rappresentazione geometrica:
 
 \begin{enumerate}
     \item \textbf{Eliminazione delle false occlusioni d'angolo}: Un riquadro 
-    rettangolare inscrive il frutto includendo una quota significativa di 
-    sfondo (pari a circa il $27\%$ dell'area totale della scatola). Nei 
-    grappoli con frutti disposti diagonalmente, gli angoli dei riquadri 
-    si sovrappongono pur senza alcun contatto fisico tra i pomodori. Questo 
-    induce la baseline a considerare occluso un frutto che in realtà è 
-    completamente libero.
+    rettangolare allineato agli assi (AABB) racchiude il pomodoro includendo anche 
+    i quattro angoli vuoti, che occupano circa il $21.5\%$ dell'intera scatola 
+    (pari a un'area vuota di oltre il $27\%$ rispetto all'ingombro effettivo del 
+    frutto, valore che cresce ulteriormente se il pomodoro è allungato e inclinato). 
+    Quando due pomodori si trovano vicini in diagonale, gli angoli delle rispettive 
+    scatole si sovrappongono pur senza alcun contatto reale tra i frutti. Questo 
+    porta la baseline a rilevare una falsa occlusione e ad applicare la penalità 
+    $\gamma_{\text{occ}} = 0.70$ a un frutto che in realtà è libero.
     \item \textbf{Rappresentazione dell'eccentricità e dell'orientamento}: 
     I pomodori presentano frequentemente forme ovoidali. L'ellisse orientata 
     cattura fedelmente l'angolo $\theta_i$ e i semiassi del frutto, 
@@ -333,12 +328,22 @@ Senza questo incentivo, $T_2$ ($0.466$) sarebbe rimasto subordinato a $T_3$
 al moltiplicatore dinamico, $T_2$ scavalca $T_3$ ($0.559 > 0.475$) e viene 
 raccolto come Rank~2, lasciando $T_3$ al Rank~3.
 
-Dal punto di vista operativo, questo comportamento rispecchia la logica di 
-raccolta umana: una volta raccolto il primo pomodoro $T_1$, il braccio 
-robotico si trova già vicino e in una posizione favorevole per raggiungere 
-$T_2$. Raccogliere subito i frutti vicini evita al braccio spostamenti inutili, 
-riducendo il tempo necessario per la raccolta e il rischio di urtare rami e 
-foglie.
+Dal punto di vista pratico, questo comportamento è vantaggioso per due motivi:
+\begin{itemize}
+    \item \textbf{Sicurezza meccanica}: poiché $T_1$ si trova davanti a $T_2$, 
+    tentare di raccogliere direttamente $T_2$ comporterebbe il rischio di urtare 
+    e danneggiare il frutto antistante con le dita della pinza. Raccogliere 
+    prima $T_1$ libera il corridoio di accesso frontale per il braccio.
+    \item \textbf{Continuità sul grappolo locale}: all'inizio il pomodoro $T_2$ 
+    aveva un punteggio più basso ($G_2 = 0.466$) rispetto al frutto laterale $T_3$ 
+    ($G_3 = 0.475$) solo perché l'occlusione di $T_1$ ne nascondeva una parte, 
+    riducendone l'area visibile alla telecamera. Senza il bonus di sblocco, dopo aver 
+    tolto $T_1$ il robot sarebbe "saltato" sul frutto laterale $T_3$, lasciando 
+    indietro $T_2$. Il moltiplicatore $\beta_{\text{unlock}} = 1.20$ compensa 
+    questo svantaggio visivo iniziale, consentendo al manipolatore di completare 
+    la raccolta dei pomodori contigui sullo stesso grappolo prima di spostarsi su 
+    altri tralci.
+\end{itemize}
 
 
 \subsection{Inversione delle Priorità e Frutti Allungati}
