@@ -1,25 +1,19 @@
 \chapter{Validazione Sperimentale e Discussione}
 \label{chap:validazione}
 
-In questo capitolo vengono analizzati i risultati ottenuti testando la pipeline
-decisionale proposta nel Capitolo~\ref{chap:metodologia}. L'obiettivo 
-principale è verificare se la modellazione geometrica con ellissi e la logica 
-di pianificazione dinamica migliorino effettivamente la scelta della sequenza 
-di raccolta rispetto ai metodi basati su \textit{bounding box}.
+In questo capitolo vengono presentati i risultati ottenuti testando la 
+pipeline decisionale proposta nel Capitolo~\ref{chap:metodologia}. L'obiettivo 
+principale è verificare se la modellazione geometrica con ellissi e la pianificazione 
+dinamica migliorino concretamente la scelta della sequenza di raccolta 
+rispetto ai metodi tradizionali basati su \textit{bounding box}.
 
-L’indagine sperimentale si sviluppa secondo un percorso analitico progressivo. 
-In primo luogo, vengono formalizzate le condizioni al contorno del banco di 
-prova, definendoi criteri di selezione del dataset di test in ambiente di 
-serra, la configurazione operativa del modello di visione a monte e il quadro 
-completo dei parametri che governano la pipeline. Su queste basi, l’efficacia 
-della modellazione ellittica viene valutata mediante un benchmark comparativo 
-a tre vie, misurandone le divergenze e il grado di concordanza rispetto 
-all’approccio convenzionale a riquadri rigidi e alle scelte di riferimento 
-annotate da operatori umani. Il capitolo si conclude infine con una 
-discussione dei casi di studio più rappresentativi, esaminando in 
-dettaglio le dinamiche di sblocco delle occlusioni, i fattori che garantiscono 
-la stabilità delle decisioni e i limiti operativi emersi nelle condizioni 
-reali di acquisizione.
+Dapprima vengono descritte le immagini di test acquisite in serra e i 
+parametri operativi della pipeline. Successivamente, l'efficacia del metodo 
+viene valutata confrontando le decisioni dell'algoritmo con la baseline a 
+riquadri rigidi e con le scelte di riferimento annotate da operatori umani. 
+Infine, l'analisi di alcuni casi studio reali consente di esaminare da vicino 
+come il sistema gestisce lo sblocco dei frutti occlusi e quali sono i 
+principali limiti riscontrati.
 
 \section{Configurazione Sperimentale e Dataset di Test}
 \label{sec:setup_sperimentale}
@@ -39,9 +33,7 @@ garantirne la riproducibilità.
 
 La sperimentazione è stata condotta a partire da un dataset acquisito in 
 ambiente di serra, composto complessivamente da $1803$ immagini con 
-risoluzione nativa di $432 \times 432$ pixel. Il set è suddiviso nella 
-canonica partizione di addestramento ($1572$ immagini), validazione 
-($153$ immagini) e test ($78$ immagini). Le annotazioni poligonali 
+risoluzione nativa di $432 \times 432$ pixel. Le annotazioni poligonali 
 comprendono quattro classi: frutti (\textit{tomato}), fusto principale 
 (\textit{MainStem}), peduncoli (\textit{peduncle}) e piccioli 
 (\textit{petiole}). Ai fini della raccolta, la pipeline sviluppata elabora 
@@ -115,8 +107,252 @@ formulazioni matematiche dedotte nel Capitolo~\ref{chap:metodologia}.
 
 \section{Analisi Comparativa delle Strategie di Picking}
 \label{sec:analisi_comparativa}
-% Benchmark: selezione diretta senza occlusioni vs approccio Bounding Box vs approccio ellittico proposto.
+
+La validazione sperimentale richiede un confronto quantitativo diretto con le 
+metodologie convenzionali di selezione dei target. L'obiettivo è verificare 
+se la modellazione mediante ellissi orientate e la ripianificazione dinamica 
+offrano un incremento misurabile nell'accuratezza della sequenza di raccolta 
+rispetto all'impiego dei tradizionali riquadri rigidi (\textit{bounding box}).
+
+\subsection{Metodologia di Benchmark e Criteri di Valutazione}
+\label{subsec:metodologia_benchmark}
+
+Per quantificare l'impatto della modellazione proposta, è stato condotto un 
+confronto sperimentale a tre vie su immagini reali acquisite in serra:
+\begin{enumerate}
+    \item \textbf{Ground Truth Umano}: sequenza di raccolta ideale (fino a 
+    tre frutti: $H_1, H_2, H_3$) annotata manualmente da operatori su un 
+    sottoinsieme di $21$ scene a elevata densità di grappolo, selezionata 
+    valutando l'accessibilità visiva e l'assenza di ostacoli frontali.
+    \item \textbf{Baseline Bounding Box}: implementazione di 
+    riferimento~\cite{collega_yolo} che modella i pomodori tramite riquadri 
+    rigidi allineati agli assi (AABB) o cerchi isotropi, determinando le 
+    occlusioni e la sequenza in modo statico.
+    \item \textbf{Planner Ellittico Proposto}: la pipeline descritta nel 
+    Capitolo~\ref{chap:metodologia}, basata su fitting di ellissi orientate 
+    ($a_i, b_i, \theta_i$), calcolo dell'Area Ownership per l'ordinamento in 
+    profondità e ripianificazione dinamica con bonus di sblocco 
+    $\beta_{\text{unlock}}$.
+\end{enumerate}
+
+La valutazione si concentra su due criteri principali: la concordanza sulla 
+scelta del primo frutto da raccogliere (Rank~1), che rappresenta la decisione 
+più critica per prevenire collisioni nell'approccio iniziale del robot, e 
+l'aderenza della sequenza completa ($N_{\max} = 3$) rispetto alla strategia 
+umana.
+
+
+\subsection{Risultati Quantitativi Globali}
+\label{subsec:risultati_globali}
+
+L'analisi condotta sull'intero set di test ($43$ scene valide) ha evidenziato 
+la seguente distribuzione dei comportamenti decisionali:
+\begin{itemize}
+    \item In $27$ scene su $43$ ($62.8\%$), i due algoritmi producono la 
+    medesima sequenza di prelievo. Questo risultato attesta che in grappoli 
+    sparsi o con sovrapposizioni minime la modellazione ellittica preserva la 
+    coerenza con la baseline, senza introdurre distorsioni.
+    \item In $12$ scene ($27.9\%$), l'algoritmo ellittico diverge dalla 
+    baseline, modificando il target selezionato come Rank~1 oppure invertendo 
+    l'ordine di prelievo dei frutti successivi.
+    \item In $4$ scene ($9.3\%$), entrambi i metodi segnalano l'assenza di 
+    frutti maturi accessibili, comportandosi correttamente come meccanismo di 
+    sicurezza (\textit{safe-fail}) in presenza di soli pomodori verdi o 
+    totalmente occlusi.
+\end{itemize}
+
+Nel confronto diretto con il Ground Truth umano condotto sulle $21$ scene 
+di riferimento, entrambi i metodi evidenziano un tasso di concordanza sul 
+primo bersaglio (Rank~1) pari all'$81.0\%$ ($17$ scene su $21$). Tuttavia, 
+l'analisi disaggregata dimostra che le due strategie operano scelte 
+profondamente differenti nei contesti critici: l'approccio ellittico corregge 
+errori sostanziali della baseline in presenza di grappoli densi (come nel caso 
+di Figura~\ref{fig:confronto_trittico}, in cui il riquadro rigido tentava il 
+prelievo di un frutto occluso), mentre differisce dall'annotazione umana solo 
+in presenza di lievi asimmetrie nelle maschere di segmentazione o di 
+ambiguità prospettiche tra frutti complanari.
+
+
+\subsection{Origine Geometrica delle Divergenze}
+\label{subsec:origine_divergenze}
+
+Come illustrato nel confronto qualitativo di Figura~\ref{fig:confronto_trittico}, 
+le divergenze emerse tra i due approcci derivano da tre fattori 
+intrinseci alla rappresentazione geometrica:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig4_1_confronto_trittico.jpg}
+    \caption[Confronto qualitativo delle strategie di picking su grappolo denso]{Confronto 
+    qualitativo delle strategie di picking su un grappolo denso: 
+    (a)~Ground Truth umano ($H_1, H_2, H_3$), con priorità sul frutto frontale destro; 
+    (b)~Baseline a bounding box ($C_1, C_2, C_3$), che tenta erroneamente il prelievo 
+    del frutto centrale occluso; 
+    (c)~Planner ellittico proposto ($E_1, E_2, E_3$), che modella correttamente l'ingombro 
+    e assegna il Rank~1 al pomodoro libero, in piena concordanza con l'operatore.}
+    \label{fig:confronto_trittico}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Eliminazione delle false occlusioni d'angolo}: Un riquadro 
+    rettangolare inscrive il frutto includendo una quota significativa di 
+    sfondo (pari a circa il $27\%$ dell'area totale della scatola). Nei 
+    grappoli con frutti disposti diagonalmente, gli angoli dei riquadri 
+    si sovrappongono pur senza alcun contatto fisico tra i pomodori. Questo 
+    induce la baseline a considerare occluso un frutto che in realtà è 
+    completamente libero.
+    \item \textbf{Rappresentazione dell'eccentricità e dell'orientamento}: 
+    I pomodori presentano frequentemente forme ovoidali. L'ellisse orientata 
+    cattura fedelmente l'angolo $\theta_i$ e i semiassi del frutto, 
+    stimando con precisione l'effettiva area di contatto $\rho_{ij}$ tra corpi 
+    adiacenti.
+    \item \textbf{Pianificazione dinamica Pick \& Update}: La baseline valuta 
+    la raggiungibilità in un singolo passaggio statico. Al contrario, la 
+    pipeline proposta simula la rimozione del frutto selezionato e aggiorna le 
+    occlusioni residue: l'assegnazione del bonus di sblocco 
+    $\beta_{\text{unlock}} = 1.20$ promuove i frutti retrostanti liberati 
+    dall'azione precedente, rispecchiando l'ordine di rimozione progressivo 
+    adottato naturalmente dall'operatore umano.
+\end{enumerate}
 
 \section{Analisi dei Casi Studio e Discussione}
 \label{sec:casi_studio_discussione}
-% Discussione qualitativa e quantitativa su grappoli complessi, falsi positivi di occlusione e sblocco dei target.
+
+L'analisi dei casi studio consente di osservare il comportamento dell'algoritmo 
+su situazioni reali complesse, verificando da vicino come viene gestito lo 
+sblocco dei frutti occlusi, quali fattori determinano la sequenza di raccolta 
+e quali sono i principali limiti pratici del sistema.
+
+
+\subsection{Dinamica di Sblocco delle Occlusioni}
+\label{subsec:caso_studio_sblocco}
+
+Il primo caso studio analizza il comportamento della pipeline decisionale sul 
+fotogramma ad alta densità illustrato in Figura~\ref{fig:caso_sblocco}. La 
+scena presenta un grappolo composto da tre pomodori maturi ($T_1, T_2, T_3$) 
+e due frutti acerbi sottostanti:
+\begin{itemize}
+    \item $T_1$, posizionato inferiormente a coordinate $(245, 262)$, con 
+    punteggio geometrico iniziale $G_1 = 0.482$;
+    \item $T_2$, situato a coordinate $(257, 207)$ immediatamente alle spalle 
+    di $T_1$, con punteggio geometrico di base $G_2 = 0.466$;
+    \item $T_3$, collocato lateralmente a coordinate $(314, 179)$, privo di 
+    ostacoli frontali, con punteggio geometrico $G_3 = 0.475$.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig4_2_caso_studio_sblocco.jpg}
+    \caption[Dinamica di sblocco su grappolo denso]{Dinamica di sblocco su un 
+    grappolo denso con occlusioni multiple. 
+    (a)~Ground Truth umano ($H_1, H_2, H_3$); 
+    (b)~Baseline a bounding box ($C_1, C_2, C_3$); 
+    (c)~Planner ellittico ($E_1, E_2, E_3$), in cui la rimozione di $E_1$ 
+    sblocca $E_2$ assegnandogli il bonus $\beta_{\text{unlock}} = 1.20$ e 
+    consentendogli di scavalcare il frutto laterale $E_3$.}
+    \label{fig:caso_sblocco}
+\end{figure}
+
+Alla prima iterazione ($t = 1$), l'algoritmo valuta $T_1$ come frutto più 
+accessibile e lo assegna al Rank~1 ($S_1 = 0.482$). Poiché $T_1$ si trova 
+frontalmente rispetto a $T_2$, la simulazione del suo prelievo azzera la 
+sovrapposizione reciproca ($\rho_{12} = 0$), liberando il target retrostante. 
+Al passo successivo ($t = 2$), al pomodoro $T_2$ viene quindi applicato il 
+bonus di sblocco $\beta_{\text{unlock}} = 1.20$, aggiornandone il punteggio a:
+\begin{equation}
+    S_2 = G_2 \times \beta_{\text{unlock}} = 0.466 \times 1.20 = 0.559
+\end{equation}
+Senza questo incentivo, $T_2$ ($0.466$) sarebbe rimasto subordinato a $T_3$ 
+($0.475$), spingendo il pianificatore a selezionare il frutto laterale. Grazie 
+al moltiplicatore dinamico, $T_2$ scavalca $T_3$ ($0.559 > 0.475$) e viene 
+raccolto come Rank~2, lasciando $T_3$ al Rank~3.
+
+Dal punto di vista operativo, questo comportamento rispecchia la logica di 
+raccolta umana: una volta raccolto il primo pomodoro $T_1$, il braccio 
+robotico si trova già vicino e in una posizione favorevole per raggiungere 
+$T_2$. Raccogliere subito i frutti vicini evita al braccio spostamenti inutili, 
+riducendo il tempo necessario per la raccolta e il rischio di urtare rami e 
+foglie.
+
+
+\subsection{Inversione delle Priorità e Frutti Allungati}
+\label{subsec:caso_studio_inversione}
+
+Il secondo caso studio, illustrato in Figura~\ref{fig:caso_inversione}, 
+mostra come l'uso delle ellissi risolva i limiti dei modelli rettangolari 
+quando i pomodori hanno una forma allungata.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig4_3_caso_studio_inversione.jpg}
+    \caption[Inversione delle priorità di picking su grappolo verticale]{Inversione 
+    delle priorità di picking su un grappolo verticale. (a)~Scelta umana di 
+    riferimento ($H_1, H_2, H_3$). (b)~Baseline BBox ($C_1, C_2, C_3$), che 
+    sceglie per errore il frutto centrale ($C_2$) prima di quello in basso 
+    ($C_3$). (c)~Planner ellittico ($E_1, E_2, E_3$), che si adatta alla forma 
+    allungata del pomodoro inferiore assegnandogli il Rank~2 ($E_2$), 
+    rispecchiando esattamente la scelta dell'operatore umano.}
+    \label{fig:caso_inversione}
+\end{figure}
+
+La scena mostra un grappolo verticale con tre pomodori in primo piano lungo il 
+tralcio. Entrambi i metodi concordano nell'assegnare il Rank~1 al pomodoro in 
+alto a coordinate $(147, 163)$, che è maturo e del tutto libero da ostacoli. 
+La differenza fondamentale riguarda la scelta del secondo frutto da 
+raccogliere, tra quello centrale a $(145, 254)$ e quello in basso a $(126, 331)$:
+\begin{itemize}
+    \item La baseline a Bounding Box seleziona il pomodoro centrale $(145, 254)$ 
+    come Rank~2 ($C_2$) e lascia per ultimo quello in basso $(126, 331)$ al 
+    Rank~3 ($C_3$);
+    \item Il nostro planner a ellissi inverte l'ordine: raccoglie prima il 
+    pomodoro in basso $(126, 331)$ come Rank~2 ($E_2$) e poi quello centrale 
+    $(145, 254)$ come Rank~3 ($E_3$), esattamente nello stesso ordine scelto 
+    dall'operatore umano ($H_1 \to H_2 \to H_3$).
+\end{itemize}
+
+Questo cambiamento è dovuto alla forma allungata del pomodoro inferiore, che 
+ha un'altezza quasi doppia rispetto alla larghezza (semiassi di $30.7\text{ px}$ 
+e $57.1\text{ px}$, con un rapporto di $1.86:1$). La baseline usa un riquadro 
+rettangolare che allarga troppo l'area occupata ai lati, facendo credere al 
+sistema che il pomodoro centrale sia sopra a quello inferiore. L'ellisse 
+inclinata ($\theta \approx 3.2^\circ$), invece, segue con precisione la forma 
+reale del frutto: l'algoritmo capisce quindi che il pomodoro in basso è libero 
+e può essere raccolto subito, senza rischiare collisioni.
+
+Oltre alla corretta stima delle sovrapposizioni, questo caso evidenzia un netto 
+miglioramento nel calcolo del punteggio geometrico $G$. Nella baseline di 
+riferimento, il perimetro del frutto viene calcolato direttamente sul contorno 
+grezzo della maschera di segmentazione, che presenta bordi frastagliati e a 
+gradino; questo fa aumentare artificialmente il perimetro misurato 
+($P = 313.2\text{ px}$) e abbassa la circolarità a $C = 0.631$. Nel nostro 
+approccio, l'uso dell'involucro convesso (\textit{Convex Hull}) prima del fitting 
+dell'ellisse regolarizza i contorni, riducendo il perimetro a $P = 283.1\text{ px}$ 
+e portando la circolarità a $C = 0.772$ ($+0.141$). Questo incremento 
+migliora direttamente lo score geometrico $G$, fornendo una stima della 
+raggiungibilità più realistica e stabile rispetto alla maschera grezza.
+
+
+\subsection{Limiti Sistemici e Condizioni Critiche}
+\label{subsec:limiti_sistemici}
+
+L'analisi sperimentale ha evidenziato due limiti pratici della pipeline, 
+che indicano le direzioni per i futuri sviluppi:
+\begin{enumerate}
+    \item \textbf{Zone di forte ombra e filtro di maturità}: La distinzione tra 
+    pomodori maturi e acerbi si basa su soglie minime di colore e luminosità 
+    nello spazio HSV ($S > 50$ e $V > 50$). Quando un frutto si trova sotto una 
+    fitta ombra fogliare, molti dei suoi pixel risultano troppo bui per 
+    superare la soglia. La forte riduzione dei pixel analizzabili rende il 
+    calcolo della maturità più fragile ed esposto a disturbi dello sfondo. In 
+    futuro, questo limite potrà essere superato adottando soglie che si adattano 
+    automaticamente alla luce della scena, oppure addestrando una piccola rete 
+    neurale dedicata unicamente a riconoscere la maturazione.
+    \item \textbf{Frutti completamente nascosti e visione da singolo punto 
+    di vista}: L'algoritmo elabora una sola inquadratura fotografica fissa. 
+    Se un pomodoro maturo è interamente coperto da foglie o posizionato dietro 
+    al fusto della pianta, la telecamera non può rilevarlo in alcun modo. 
+    Questo evidenzia il limite della visione statica e la necessità di passare 
+    a strategie di \textit{Active Vision}: muovendo la telecamera con il braccio 
+    robotico attorno al grappolo, il sistema potrà esplorare la pianta da diverse 
+    angolazioni e individuare anche i frutti inizialmente non visibili.
+\end{enumerate}
