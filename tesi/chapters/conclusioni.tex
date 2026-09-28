@@ -1,6 +1,128 @@
-% !TEX root = ../tesi.tex
 \chapter{Conclusioni e Sviluppi Futuri}
 \label{chap:conclusioni}
 
-% Sintesi dei contributi: efficacia del modello geometrico ellittico e della logica dinamica Pick & Update.
-% Sviluppi futuri: integrazione in ROS 2 (Humble), MoveIt 2 per traiettorie con orientamento ellisse e porting nodi in C++.
+Il lavoro svolto in questa tesi ha affrontato il problema della raccolta 
+automatizzata di pomodori in serra, concentrandosi sulla pianificazione 
+della sequenza di prelievo all'interno di grappoli densi e complessi.
+
+Nel quadro di un approccio di visione attiva (\textit{Active Vision}), l'analisi accurata 
+della singola inquadratura rappresenta il primo passo indispensabile: prima ancora di 
+muovere la telecamera attorno alla pianta per cercare frutti nascosti, il sistema deve 
+saper gestire le occlusioni visibili e pianificare una sequenza sicura per evitare collisioni.
+
+Di seguito vengono riassunti i principali risultati raggiunti con la 
+modellazione ellittica e la ripianificazione dinamica, delineando poi 
+le prospettive per i futuri sviluppi e l'integrazione robotica.
+
+
+\section{Sintesi dei Risultati e Contributi della Tesi}
+\label{sec:sintesi_risultati}
+
+La raccolta robotizzata in serra richiede di individuare con precisione 
+l'ordine di presa dei frutti, soprattutto all'interno di grappoli densi dove 
+le occlusioni reciproche rendono rischioso l'avvicinamento del robot. I metodi 
+tradizionali, basati su riquadri rettangolari rigidi (\textit{bounding box}) o stime statiche, 
+mostrano forti limiti quando i pomodori sono a stretto contatto o presentano forme allungate.
+
+Per superare queste criticità, è stata sviluppata e validata una pipeline 
+decisionale basata su tre passaggi principali:
+\begin{enumerate}
+    \item \textbf{Regolarizzazione geometrica con Convex Hull}: l'applicazione 
+    dell'involucro convesso sulle maschere di YOLO11-x ha permesso di ripulire i 
+    bordi a gradino, rendendo il calcolo del perimetro e della circolarità stabile 
+    e realistico;
+    \item \textbf{Modellazione ellittica orientata}: l'approssimazione dei pomodori 
+    mediante ellissi orientate ha eliminato le false occlusioni d'angolo tipiche 
+    dei rettangoli rigidi (in cui l'area vuota negli angoli occupa circa il $21.5\%$ 
+    della scatola), adattandosi all'inclinazione e alla forma reale del frutto;
+    \item \textbf{Task planning dinamico \textit{Pick \& Update}}: la simulazione 
+    del prelievo a ogni passo con l'assegnazione del bonus di sblocco 
+    ($\beta_{\text{unlock}} = 1.20$) ha consentito di ripianificare la sequenza, 
+    premiando i frutti retrostanti appena liberati e trattando i pomodori acerbi 
+    come ostacoli statici da non urtare.
+\end{enumerate}
+
+La sperimentazione condotta sulle immagini reali di serra ha confermato la validità del 
+metodo proposto. 
+
+Analizzando l'intero set di $43$ scene, nel $62.8\%$ dei casi ($27$ scene) la sequenza 
+prodotta coincide con quella della baseline, confermando che nei grappoli semplici il 
+modello non introduce distorsioni. Nelle scene dense ($12$ casi, $27.9\%$), l'algoritmo 
+corregge errori di precedenza dovuti a contatti diagonali, mentre in $4$ scene ($9.3\%$) 
+rileva correttamente l'assenza di frutti maturi accessibili, arrestando la raccolta 
+in sicurezza (condizione di \textit{safe-fail}).
+
+Sul benchmark di $21$ scene ad alta densità con riferimento umano, sia la baseline sia 
+il modello proposto registrano una concordanza dell'$81.0\%$ sul primo frutto da raccogliere 
+(Rank~1, $17$ casi su $21$). Tuttavia, un'analisi puntuale delle scene rivela come i due 
+approcci giungano a tale risultato per vie profondamente diverse. Nelle situazioni in cui 
+la baseline fallisce, l'errore è causato dalla geometria rigida dei riquadri rettangolari, 
+i cui angoli vuoti inducono false occlusioni che spingono il sistema a selezionare frutti 
+parzialmente coperti. Al contrario, le divergenze del planner ellittico non comportano 
+rischi di collisione, ma si verificano quando più pomodori risultano ugualmente accessibili: 
+in tali contesti, l'algoritmo privilegia deterministicamente il frutto con il punteggio 
+geometrico più elevato (ad esempio per una maggiore centralità ottica), a fronte di una 
+scelta soggettiva dell'operatore.
+
+La reale efficacia della modellazione curvilinea e della pianificazione dinamica emerge 
+sui prelievi successivi. Grazie all'aggiornamento iterativo dello stato e all'introduzione 
+del bonus di sblocco ($\beta_{\text{unlock}} = 1.20$), la concordanza con l'operatore umano 
+sale al $46.2\%$ sul secondo frutto (rispetto al $38.5\%$ della baseline) e raggiunge il 
+$40.0\%$ sul terzo, raddoppiando l'accuratezza del modello convenzionale ($20.0\%$).
+
+Infine, dal punto di vista computazionale, la scelta di selezionare a monte un pool 
+ristretto di $K = 8$ candidati limita i confronti tra ellissi a un massimo di $56$ 
+verifiche geometriche. Questo rende l'algoritmo leggero e veloce, adatto a essere 
+eseguito in tempo reale a bordo di un sistema robotico.
+
+
+\section{Sviluppi Futuri e Integrazione Robotica}
+\label{sec:sviluppi_futuri}
+
+I risultati ottenuti in questo lavoro confermano l'efficacia dell'approccio geometrico 
+e dinamico per la pianificazione della raccolta su singola inquadratura. Trattandosi di 
+uno studio incentrato sulla componente algoritmica e decisionale, il naturale proseguimento 
+di questa ricerca riguarda il trasferimento della pipeline a bordo di un manipolatore 
+robotico operativo e la risoluzione dei limiti pratici riscontrati durante la sperimentazione.
+
+Il primo passo verso l'applicazione fisica consiste nel passaggio dalle coordinate del piano 
+immagine allo spazio operativo tridimensionale. Utilizzando una telecamera di profondità 
+RGB-D, la posizione bidimensionale $(u, v)$ del centroide calcolato dalla nostra pipeline 
+può essere combinata con il canale di profondità per ricavare le coordinate cartesiane $(X, Y, Z)$ 
+nel sistema di riferimento ottico della telecamera, mediante la matrice dei parametri intrinseci 
+del sensore \cite{gongal2015sensors}. In questa fase, per evitare che rumore ottico o riflessi 
+alterino la misura, la profondità $Z$ del pomodoro potrà essere calcolata come mediana dei pixel 
+validi all'interno della maschera di segmentazione. Inoltre, l'angolo di inclinazione $\theta$ 
+restituito dal fitting dell'ellisse fornirà l'orientamento necessario per allineare la pinza di presa 
+lungo l'asse principale del frutto, agevolando il distacco meccanico dal peduncolo. Attraverso il 
+middleware ROS~2 e il pacchetto di trasformazioni spaziali \texttt{tf2}, le coordinate verranno 
+quindi convertite rispetto alla base del manipolatore (come il braccio industriale ABB presente 
+nel setup sperimentale) e inviate a MoveIt~2 \cite{chitta2012moveit}. Il framework di motion planning 
+potrà così generare traiettorie prive di collisioni nello spazio dei giunti, guidando l'organo di presa 
+verso i frutti secondo l'ordine di priorità calcolato dal nostro planner.
+
+Un secondo fronte di evoluzione riguarda il superamento dei limiti imposti dalla visione 
+da un singolo punto di vista. Come osservato analizzando le immagini di test in 
+\textit{immaginiPerAlgoritmo}, l'algoritmo gestisce con successo le occlusioni parziali tra 
+pomodori adiacenti, ma non può individuare frutti maturi completamente nascosti dietro il fusto 
+o sotto uno strato fitto di vegetazione. La soluzione naturale consiste nell'integrare la pipeline 
+sviluppata all'interno di una strategia di visione attiva (\textit{Active Vision}) \cite{silwal2017design}. 
+Montando il sensore visivo direttamente sul polso del manipolatore (\textit{eye-in-hand}), il robot 
+potrà compiere movimenti esplorativi attorno alla pianta per acquisire viste complementari da angolazioni 
+diverse (\textit{Next-Best-View}). In questo scenario, la nostra pipeline agirà come decisore locale: a ogni 
+nuova inquadratura, il modello mapperà le occlusioni visibili e aggiornerà la lista dei frutti da raccogliere, 
+integrando progressivamente la conoscenza del grappolo man mano che i movimenti del braccio svelano i 
+pomodori precedentemente occlusi.
+
+Infine, un'ulteriore linea di sviluppo riguarda la robustezza del filtro di maturità. L'analisi 
+delle condizioni critiche ha evidenziato come l'impiego di soglie rigide nello spazio colore HSV 
+($S > 50, V > 50$) mostri fragilità in presenza di forti zone d'ombra, dove la scarsa luminosità 
+rischia di far escludere dal conteggio molti pixel rossi. Per superare questa limitazione senza 
+compromettere la semplicità computazionale del sistema, si prospettano due alternative: la transizione 
+allo spazio colore CIELAB ($L^*a^*b^*$), in cui il canale cromatico $a^*$ (che misura la transizione dal 
+verde al rosso) è disaccoppiato dall'intensità luminosa $L^*$ risultando pressoché immune alle ombre; 
+oppure l'addestramento di una rete convoluzionale leggera (come MobileNetV3) operante direttamente 
+sui ritagli dei singoli pomodori individuati da YOLO \cite{xiao2023fruit}. Quest'ultima soluzione 
+permetterebbe di stimare il grado di maturazione basandosi anche sulla tessitura superficiale del frutto, 
+riconoscendo con maggiore affidabilità anche le fasi intermedie di viraggio del colore.
+

@@ -2,8 +2,14 @@
 \chapter{Metodologia e Pipeline Decisionale}
 \label{chap:metodologia}
 
-In questo capitolo viene presentata la pipeline decisionale sviluppata per trasformare le rilevazioni visive del modello di segmentazione in una sequenza ordinata e sicura di raccolta per un braccio robotico. Nei contesti reali di serra, la densità dei grappoli e la presenza di fogliame generano frequenti sovrapposizioni tra i frutti: la sola identificazione 2D non basta a pianificare l'azione della pinza.
-L'architettura proposta si articola in quattro fasi consecutive:
+All'interno di una serra reale, la sola identificazione visiva dei pomodori 
+non basta per guidare un braccio robotico: la forte densità dei grappoli e il 
+fogliame creano continue sovrapposizioni tra i frutti, rendendo critico capire 
+quale pomodoro raccogliere per primo senza rischiare urti con la pinza.
+
+Per colmare il divario tra la segmentazione delle immagini e l'azione fisica del 
+manipolatore, è stata sviluppata una pipeline decisionale articolata in quattro 
+stadi operativi:
 \begin{enumerate}
     \item \textbf{Modellazione geometrica}: stima della forma e dell'orientamento dei pomodori tramite ellissi fittate sull'involucro convesso (\textit{Convex Hull}), superando le limitazioni delle \textit{bounding box};
     \item \textbf{Screening e scoring}: esclusione dei frutti con area inferiore alla soglia minima e assegnazione di un punteggio geometrico combinato (area visibile, circolarità e centralità);
