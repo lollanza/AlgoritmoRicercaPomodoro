@@ -2,14 +2,108 @@
 \chapter{Introduzione}
 \label{chap:introduzione}
 
+L'automazione della raccolta in serra tramite robot è uno dei temi più interessanti 
+e attuali dell'agricoltura di precisione. In questo capitolo viene introdotto il contesto 
+generale del lavoro, spiegando i motivi pratici ed etici per cui è utile automatizzare 
+la raccolta dei pomodori. Successivamente viene descritto il problema principale 
+affrontato nella tesi, ovvero la difficoltà di gestire le occlusioni all'interno dei 
+grappoli densi, per poi presentare gli obiettivi principali del lavoro.
+
+
 \section{Contesto e Motivazioni}
 \label{sec:contesto_motivazioni}
-% Contesto dell'agricoltura di precisione, automazione della raccolta in serra e sfide operative.
+
+Il lavoro svolto in questa tesi fa parte di un progetto di ricerca più ampio del 
+Dipartimento di Informatica dell'Università degli Studi di Milano, coordinato dai 
+professori Nicola Basilico e Matteo Luperto, con l'obiettivo di applicare la robotica 
+e l'intelligenza artificiale all'agricoltura di precisione.
+
+Negli ultimi anni la coltivazione in serra ha avuto una grande diffusione, poiché permette 
+di controllare l'ambiente di crescita delle piante, risparmiare acqua, limitare l'uso di 
+pesticidi e produrre durante tutto l'anno. Nonostante questi miglioramenti tecnologici, 
+la gestione della serra richiede ancora molto lavoro manuale, soprattutto per il 
+controllo delle piante e per la raccolta dei frutti \cite{gongal2015sensors}.
+
+In particolare, la raccolta del pomodoro è una delle attività più faticose e costose. 
+Gli operatori devono lavorare per molte ore all'interno delle serre, dove le temperature 
+e i livelli di umidità sono spesso molto alti. A questo si aggiunge la crescente difficoltà 
+nel trovare manodopera stagionale, oltre a una motivazione etica molto importante: 
+l'automazione di questi compiti gravosi può contribuire a ridurre fenomeni di sfruttamento 
+e caporalato, ancora troppo presenti nel settore agricolo. L'uso di robot per la raccolta 
+permetterebbe inoltre di lavorare in modo continuo, ottimizzando i tempi di produzione.
+
+In passato, i primi tentativi di automatizzare la raccolta si sono basati su macchine 
+meccaniche come scuotitori o pettini. Questi sistemi funzionano a "ciclo aperto" 
+(\textit{open-loop}): scuotono l'intera pianta senza distinguere quali frutti siano pronti 
+e quali no, rischiando di rovinare la pianta e provocando molti sprechi. L'obiettivo della 
+robotica moderna è invece realizzare sistemi a "ciclo chiuso" (\textit{closed-loop}), 
+capaci di compiere una raccolta selettiva \cite{silwal2017design}: il robot deve raccogliere 
+soltanto i pomodori maturi al punto giusto per il mercato, lasciando intatti quelli verdi 
+in modo che possano maturare nei giorni successivi.
+
+Per fare questo, la visione artificiale è il componente fondamentale del robot. L'ambiente 
+della serra è complesso e variabile: la luce solare cambia continuamente durante il giorno, 
+c'è polvere e la vegetazione è molto fitta. Prima di poter muovere il braccio meccanico per 
+afferrare un pomodoro, il sistema deve essere in grado di "vedere" e capire la scena: 
+deve individuare dove si trovano i frutti, capire quali sono maturi e quali acerbi, e 
+verificare se siano facili da raggiungere, così da evitare urti accidentali con i rami o con la pianta.
+
 
 \section{Definizione del Problema}
 \label{sec:definizione_problema}
-% Raccolta in grappoli compatti: occlusioni reciproche tra frutti, collisioni e gestione dei frutti acerbi.
 
-\section{Obiettivi della Tesi e Organizzazione dell'Elaborato}
+All'interno di una serra, il compito di raccogliere i pomodori si scontra con 
+una difficoltà fondamentale: la struttura biologica della pianta. I pomodori 
+non crescono isolati su rami sgombri, ma si sviluppano aggregati in 
+grappoli densi e compatti, circondati da foglie, rami di sostegno e dal fusto principale.
+
+In una scena così affollata, la sola identificazione visiva dei frutti tramite i modelli 
+classici di Object Detection non è sufficiente per guidare un braccio robotico. Questi 
+modelli racchiudono solitamente gli oggetti all'interno di riquadri rettangolari rigidi 
+(\textit{bounding box}). Tuttavia, i pomodori hanno una sagoma tondeggiante o allungata: 
+di conseguenza, i quattro angoli del rettangolo includono inevitabilmente una porzione 
+consistente di spazio vuoto. Quando più pomodori crescono vicini o lungo linee oblique, 
+i loro rettangoli di delimitazione finiscono per sovrapporsi, facendo credere al sistema 
+che i frutti siano coperti tra loro anche quando in realtà sono completamente liberi.
+
+Questa imprecisione geometrica rende molto complessa la gestione delle occlusioni reciproche, 
+ovvero capire quale frutto si trovi davanti e quale dietro rispetto alla telecamera. Se il 
+robot tentasse di raccogliere un pomodoro senza considerare chi lo copre frontalmente, 
+la pinza di presa andrebbe a urtare i frutti antistanti, danneggiandoli. Inoltre, all'interno 
+dello stesso grappolo sono spesso presenti pomodori ancora verdi: se un frutto acerbo si trova 
+davanti a uno maturo, agisce come un ostacolo fisico che impedisce l'accesso al frutto rosso.
+
+Infine, la raccolta di un grappolo non può essere pianificata in un colpo solo in modo statico. 
+La rimozione fisica di un pomodoro modifica immediatamente la scena: togliere il primo frutto 
+frontale libera spazio e permette di raggiungere i pomodori retrostanti che prima erano coperti. 
+Per evitare collisioni e raccogliere i frutti nell'ordine corretto, è quindi necessario superare 
+l'approssimazione dei rettangoli rigidi e sviluppare una strategia decisionale dinamica, capace 
+di stimare i contatti reali e di aggiornare la sequenza di raccolta a ogni singolo prelievo.
+
+
+\section{Obiettivi della Tesi}
 \label{sec:obiettivi_tesi}
-% Descrizione degli obiettivi generali, elenco puntato dei 3 obiettivi specifici e breve panoramica della struttura dei capitoli successivi.
+
+L'obiettivo principale di questo lavoro di tesi è progettare, implementare e 
+validare una pipeline decisionale per stimare le occlusioni e pianificare la sequenza 
+di raccolta dei pomodori in serra, superando i limiti delle tradizionali 
+\textit{bounding box} attraverso una modellazione geometrica basata su ellissi orientate.
+
+Nello specifico, il lavoro si articola sui seguenti obiettivi:
+\begin{itemize}
+    \item \textbf{Modellazione geometrica con Convex Hull ed ellissi}: elaborare le 
+    maschere fornite dal modello di segmentazione YOLO11-x regolarizzandone i contorni 
+    tramite l'involucro convesso e adattarvi un'ellisse orientata, eliminando lo spazio 
+    vuoto negli angoli e stimando la reale inclinazione del frutto;
+    \item \textbf{Screening e filtro di maturità}: valutare la raggiungibilità geometrica 
+    dei pomodori (tramite area visibile, circolarità e centralità), eliminare le predizioni 
+    duplicate e distinguere i frutti maturi da quelli acerbi tramite l'analisi del colore 
+    nello spazio HSV, considerando i pomodori verdi come ostacoli da non urtare;
+    \item \textbf{Task planning dinamico \textit{Pick \& Update}}: sviluppare un algoritmo 
+    che simula il prelievo del frutto a ogni passo e aggiorna lo stato della scena, 
+    premiando con un bonus di sblocco i pomodori retrostanti appena liberati;
+    \item \textbf{Validazione sperimentale e confronto}: testare l'algoritmo su immagini 
+    reali di serra con grappoli densi, confrontando le scelte del nostro modello sia con 
+    una baseline a rettangoli rigidi sia con le decisioni prese da operatori umani.
+\end{itemize}
+

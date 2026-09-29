@@ -1,0 +1,445 @@
+--- PAGE 1 ---
+Università degli Studi di Milano
+FACOLTÀ DI SCIENZE E TECNOLOGIE
+DIPARTIMENTO DI INFORMATICA
+GIOVANNI DEGLI ANTONI
+CORSO DI LAUREA TRIENNALE IN
+INFORMATICA
+SVILUPPO DI UNA PIATTAFORMA WEB
+PER LA VISUALIZZAZIONE E IL PROCESSAMENTO
+DI SEGNALI ELETTROCARDIOGRAFICI
+Relatore:Dr. Massimo W. Rivolta
+Elaborato Finale di:
+Edoardo Pettinato
+Matr. Nr. 953028
+Anno Accademico 2025-2026
+--- PAGE 2 ---
+Sommario
+Il presente elaborato descrive la progettazione e lo sviluppo di una piattaforma web in-
+terattiva per la visualizzazione e l’analisi avanzata di segnali elettrocardiografici (ECG).
+L’obiettivo primario dello studio è superare i limiti di accessibilità e scalabilità dei tradizio-
+nali software desktop proprietari, offrendo uno strumento clinico completo e accessibile
+nativamente da browser. L’architetturafull-stackadottata si compone di un backend in
+Python (Flask) delegato all’elaborazione del segnale numerico e di un frontend reattivo
+(Nuxt 3) basato su grafica vettoriale (SVG). Il sistema è in grado di decodificare file clinici
+in formato standard WFDB (quali i database PhysioNet MIT-BIH e INCART), applicando
+una complessa pipeline algoritmica che include il filtraggio digitale passa-banda, il rile-
+vamento dei complessi QRS, la classificazione dei battiti (sinusali ed ectopici), l’estrazione
+del battito medio (per media dei battiti allineati) e la delineazione morfologica delle onde
+tramite Trasformata Wavelet Discreta (DWT). A livello di interfaccia clinica, l’applicativo
+fornisce strumenti interattivi che emulano la pratica medica tradizionale, in particolare
+un calibro vettoriale bidimensionale ad alta precisione e un modulo di refertazione auto-
+matica esportabile in formato PDF. La validazione qualitativa, basata sul riscontro di un
+medico specialista in cardiologia, ha confermato la validità dell’approccio e ha guidato
+l’affinamento sia dell’accuratezza algoritmica sia dell’usabilità (UX). I risultati ottenuti di-
+mostrano l’efficacia e i vantaggi dell’integrazione tra moderne tecnologie web reattive e
+librerie didigital signal processing, delineando una soluzione promettente per scenari di
+moderna informatica biomedica,second opinione telemedicina.
+i
+--- PAGE 3 ---
+Ringraziamenti
+Desidero esprimere la mia più profonda gratitudine al mio relatore, il Dr. Massimo W. Ri-
+volta, per avermi dato l’opportunità di svolgere questo lavoro presso ilBiomedical Image
+and Signal Processing(BiSP) Lab e per avermi guidato con competenza, disponibilità e pa-
+zienza lungo ogni fase del progetto. I suoi consigli puntuali, il suo rigore e la fiducia che
+mi ha accordato sono stati determinanti non solo per la riuscita di questo elaborato, ma
+anche per la mia crescita personale e professionale. Lo ringrazio di cuore per l’entusiasmo
+e l’attenzione con cui ha seguito il mio lavoro dall’inizio alla fine.
+Un ringraziamento speciale e sentito va al Dr. Antonio Sanzo, la cui competenza cli-
+nica e generosa disponibilità sono state preziose per la validazione della piattaforma. Il
+suo riscontro da specialista ha permesso di avvicinare lo sviluppo informatico alla pratica
+medica reale, orientando in modo concreto le scelte progettuali e arricchendo profonda-
+mente questo lavoro. Lo ringrazio per il tempo che mi ha dedicato e per il contributo
+fondamentale che ha offerto.
+Infine, desidero ringraziare la mia famiglia per il sostegno costante che non mi ha mai
+fatto mancare, e Vittoria, che mi è stata accanto in ogni momento di questo percorso,
+condividendone le fatiche e le soddisfazioni. Un grazie va anche ai miei compagni di
+università e a tutte le persone che mi sono state vicine in questi anni per aver reso più
+leggero e più bello il cammino fino a qui.
+ii
+--- PAGE 4 ---
+Indice
+Sommario i
+Ringraziamenti ii
+Indice iii
+1 Introduzione 1
+1.1 L’elettrocardiogramma e l’analisi digitale . . . . . . . . . . . . . . . . . . . 1
+1.2 Stato dell’arte . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2
+1.3 Obiettivi della Tesi . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+2 Materiali e Metodi 4
+2.1 Dataset clinici standardizzati e il formato WFDB . . . . . . . . . . . . . . . 4
+2.2 Architettura Full-Stack del sistema (Flask e Nuxt 3) . . . . . . . . . . . . . 5
+2.3 Elaborazione del segnale nel Backend . . . . . . . . . . . . . . . . . . . . . 7
+2.3.1 Lettura dei file WFDB e gestione del dato . . . . . . . . . . . . . . 7
+2.3.2 Filtraggio digitale . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+2.3.3 Rilevazione dei picchi R . . . . . . . . . . . . . . . . . . . . . . . . 8
+2.3.4 Classificazione euristica dei battiti . . . . . . . . . . . . . . . . . . 9
+2.3.5 Calcolo del battito medio e delineazione morfologica . . . . . . . . 10
+2.4 Frontend - Interfaccia di Visualizzazione . . . . . . . . . . . . . . . . . . . 11
+2.4.1 Rendering vettoriale del segnale (SVG) . . . . . . . . . . . . . . . . 11
+2.4.2 Strumenti clinici: Calibro e Refertazione . . . . . . . . . . . . . . . 12
+2.5 Elicitazione dei requisiti: Validazione con Esperto di Dominio . . . . . . . 12
+3 Risultati 14
+3.1 Interfaccia di Visualizzazione ECG . . . . . . . . . . . . . . . . . . . . . . . 15
+3.2 Estrazione del Battito Medio e Delineazione Morfologica . . . . . . . . . . 19
+3.3 Strumenti Clinici: Calibro Digitale e Refertazione . . . . . . . . . . . . . . 22
+3.4 Flessibilità Architetturale del Sistema . . . . . . . . . . . . . . . . . . . . . 25
+iii
+--- PAGE 5 ---
+4 Discussione 26
+4.1 Raggiungimento degli obiettivi . . . . . . . . . . . . . . . . . . . . . . . . . 26
+4.2 Confronto con lo stato dell’arte . . . . . . . . . . . . . . . . . . . . . . . . 27
+4.3 Scelte progettuali e relativi compromessi . . . . . . . . . . . . . . . . . . . 28
+4.4 Il ruolo della validazione con l’esperto di dominio . . . . . . . . . . . . . . 29
+4.5 Limitazioni . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 29
+5 Conclusioni 31
+5.1 Sviluppi futuri . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31
+Bibliografia 33
+iv
+--- PAGE 6 ---
+Capitolo 1
+Introduzione
+Questo primo capitolo introduce il contesto clinico e tecnologico in cui si colloca il lavo-
+ro di tesi. Dopo una sintesi dei fondamenti dell’elettrocardiogramma e della sua analisi
+digitale, si analizza lo stato dell’arte degli strumenti software esistenti, evidenziandone i
+limiti, e si delineano infine gli obiettivi che il progetto si propone di raggiungere.
+1.1 L’elettrocardiogramma e l’analisi digitale
+L’elettrocardiogramma (ECG) rappresenta lo strumento diagnostico non invasivo di ri-
+ferimento per l’analisi dell’attività elettrica del cuore. Dal punto di vista fisiologico, il
+tracciato ECG riflette i processi di depolarizzazione e ripolarizzazione del miocardio du-
+rante ogni ciclo cardiaco. L’acquisizione standard clinica avviene tipicamente attraverso
+12 derivazioni (I, II, III, aVR, aVL, aVF per gli arti e V1-V6 per le posizioni precordiali),
+le quali offrono una prospettiva tridimensionale della propagazione dell’impulso elettrico
+cardiaco [1].
+La morfologia di un segnale ECG sano è caratterizzata da una sequenza ben definita di
+onde: l’onda P (depolarizzazione atriale), il complesso QRS (depolarizzazione ventricolare)
+e l’onda T (ripolarizzazione ventricolare). La misurazione temporale di tali eventi defini-
+sce specifici intervalli clinici di fondamentale importanza diagnostica, quali l’intervallo PR
+(fisiologicamente compreso tra 120 e 200 ms), la durata del complesso QRS (generalmente
+inferiore a 120 ms) e l’intervallo QT, il cui valore corretto per la frequenza cardiaca (QTc)
+è normalmente inferiore a 440 ms. L’analisi di questi parametri, congiuntamente all’ispe-
+zione visiva della morfologia delle onde, consente l’identificazione di patologie cardiache
+come aritmie, blocchi di conduzione e contrazioni ventricolari premature (PVC).
+Tradizionalmente, l’ispezione dei tracciati avviene su supporti cartacei millimetrati, i
+quali seguono convenzioni standard internazionali: una velocità di scorrimento orizzonta-
+le pari a 25 mm/s e una calibrazione verticale di 10 mm/mV. Nonostante la digitalizzazione
+1
+--- PAGE 7 ---
+CAPITOLO 1. INTRODUZIONE2
+dei segnali, molti software desktop proprietari, spesso vincolati a specifici elettrocardio-
+grafi, continuano a rappresentare il principale strumento per l’analisi [1]. Tuttavia, con
+la maturazione delle moderne tecnologie web, è emersa la necessità di sviluppare solu-
+zioni accessibili direttamente tramite browser. L’integrazione di pipeline didigital signal
+processing(DSP) in interfacce web permette di automatizzare compiti onerosi e ripetitivi,
+quali la classificazione dei battiti o il calcolo degli intervalli temporali, riducendo i tempi
+di refertazione e minimizzando il margine di errore clinico.
+1.2 Stato dell’arte
+L’ecosistema software per la visualizzazione e l’analisi dei segnali ECG è storicamente
+frammentato e dominato da soluzioni proprietarie e architetture desktop-centriche. I soft-
+ware clinici in dotazione con gli elettrocardiografi (quali GE MUSE o Philips TraceMaster-
+Vue) offrono elevata affidabilità diagnostica, ma risultano chiusi, costosi e legati a formati
+di esportazione proprietari, come il DICOM-ECG (Digital Imaging and Communications
+in Medicine) o file basati su XML (eXtensible Markup Language), limitandone l’utilizzo in
+ambito di ricerca e telemedicina.
+Nel contesto open-source, esistono visualizzatori desktop consolidati [2], ma l’evo-
+luzione verso architetture web ha posto nuove sfide tecniche, principalmente legate al
+rendering efficiente di grandi moli di dati nelDocument Object Model(DOM) del browser.
+Il progetto PhysioNet mette a disposizioneLightW A VE[3], un visualizzatore web-based
+per l’esplorazione dei record WFDB. Sebbene sia funzionale per la visualizzazione di ba-
+se, LightWAVE presenta limitazioni nell’interattività, risultando uno strumento di pura
+ispezione che non offre funzionalità cliniche avanzate (come calibri vettoriali liberi) né
+l’integrazione con algoritmi eseguiti direttamente sui dati caricati localmente dall’utente.
+Dal punto di vista dell’elaborazione del segnale, l’avvento di Python come linguaggio
+di riferimento per il calcolo scientifico [4] ha portato allo sviluppo di numerose librerie
+open-source. Tra queste,NeuroKit2[5] rappresenta oggi una delle soluzioni più avanzate,
+fornendo algoritmi all’avanguardia per la pulizia del segnale, la rilevazione dei picchi R
+e la delineazione morfologica basata sulla Trasformata Wavelet Discreta (DWT) proposta
+da Martínez et al. [6].
+Tuttavia, si osserva in letteratura una netta separazione tra le librerie di analisi nu-
+mericabackende le interfaccefrontendper l’uso clinico. La maggior parte dei progetti
+open-source fornisce script Python per l’estrazione di feature, ma manca di un’interfaccia
+utente interattiva (GUI) che permetta al medico di validare visivamente il calcolo, modifi-
+care le rilevazioni errate e procedere alla refertazione. Il divario tecnologico attuale risiede
+pertanto nella limitata disponibilità di piattaforme web integrate che combinino la potenza
+del DSP moderno con un’interfaccia clinica interattiva e indipendente dal dispositivo.
+--- PAGE 8 ---
+CAPITOLO 1. INTRODUZIONE3
+1.3 Obiettivi della Tesi
+L’obiettivo principale di questo lavoro di tesi è la progettazione e lo sviluppo di una piat-
+taforma webfull-stackper la visualizzazione interattiva, il processamento e l’annotazione
+di segnali elettrocardiografici in formato WFDB. Il progetto si propone di colmare il di-
+vario evidenziato nello stato dell’arte, offrendo un ambiente integrato che trasformi i dati
+clinici grezzi in informazioni visive manipolabili dall’utente in modo interattivo tramite
+browser.
+Nello specifico, la tesi si articola sui seguenti obiettivi implementativi:
+•Sviluppare un’architettura web disaccoppiata, con un backend computazionale (Py-
+thon/Flask) per la manipolazione dei file binari e un frontend reattivo (Nuxt 3/Vue
+3) capace di renderizzare fluidamente segnali multi-derivazione ad alta frequenza
+tramite vettori Scalable Vector Graphics (SVG).
+•Implementare una pipeline algoritmica per il filtraggio digitale del rumore, la rile-
+vazione robusta dei complessi QRS, la classificazione euristica dei battiti (fisiologici
+vs. ectopici ventricolari) e l’allineamento dei segnali per il calcolo e la delineazione
+delbattito mediomulti-derivazione.
+•Realizzare un set di strumenti clinici interattivi, includendo un calibro digitale libero
+per la misurazione di ampiezze (mV) e tempi (ms) sul tracciato e un modulo per la
+refertazione medica automatizzata esportabile in formato PDF.
+•Validare qualitativamente la piattaforma, l’aderenza delle metriche estratte e la cor-
+rettezza visiva della rappresentazione (rispetto agli standard della carta millimetra-
+ta ECG) attraverso il confronto con un esperto di dominio (medico specialista in
+cardiologia).
+--- PAGE 9 ---
+Capitolo 2
+Materiali e Metodi
+In questo capitolo viene analizzata l’infrastruttura tecnologica e metodologica alla ba-
+se della piattaforma. L’esposizione segue il flusso logico del dato: dalla descrizione dei
+dataset clinici e del formato dei dati, alla definizione dell’architettura di sistema e alla pi-
+peline di elaborazione del segnale nel backend, fino ad arrivare alla gestione dello stato,
+al rendering nel frontend e al processo di validazione con l’esperto di dominio.
+2.1 Dataset clinici standardizzati e il formato WFDB
+Lo sviluppo e la validazione di software dedicati all’elaborazione dei segnali biomedici
+richiedono l’accesso a dati clinici standardizzati e clinicamente annotati. Il progetto Phy-
+sioNet [2] costituisce la risorsa open-source primaria in questo ambito, offrendo un vasto
+archivio di segnali fisiologici complessi.
+I segnali all’interno di PhysioNet vengono tipicamente distribuiti seguendo lo standard
+WFDB (Waveform Database). Tale formato è strutturato su più file:
+•File dati (.dat):contiene i campioni del segnale grezzo in formato binario.
+•File header (.hea):è un file testuale che descrive le specifiche tecniche della regi-
+strazione (numero di derivazioni, frequenza di campionamento, risoluzione e fattore
+di guadagno in unità del convertitore analogico-digitale (ADC) per mV).
+•File di annotazione (.atr, .qrs):contengono etichette (spessobeat-by-beat) verifi-
+cate da esperti, fondamentali per testare algoritmi di classificazione.
+Il supporto nativo a tali formati è una prerogativa essenziale per un moderno visualizza-
+tore ECG. Per garantire la flessibilità e l’affidabilità della piattaforma sviluppata in que-
+sto lavoro di tesi, la validazione è stata condotta utilizzando tre database profondamente
+diversi per caratteristiche tecniche e popolazione clinica:
+4
+--- PAGE 10 ---
+CAPITOLO 2. MATERIALI E METODI5
+Tabella 1: Caratteristiche tecniche e cliniche dei tre database PhysioNet impiegati per la
+validazione della piattaforma.
+Database Record Derivaz.𝐹 𝑠 (Hz) Durata Popolazione
+Norwegian Athlete ECG 28 12 500∼10 s Atleti sani
+MIT-BIH Arrhythmia 48 2 360∼30 min Aritmie (ambulatoriale)
+St. Petersburg INCART 75 12 257∼30 min Cardiopatia ischemica
+1.Norwegian Endurance Athlete ECG Database[7]: comprende 28 registrazioni
+a 12 derivazioni acquisite a 500 Hz su atleti d’élite sani. La particolarità di questo
+database risiede nell’alta frequenza di campionamento e nelle annotazioni testua-
+li, che lo rendono ideale per testare la delineazione morfologica su soggetti con
+adattamenti cardiaci fisiologici da sport.
+2.MIT-BIH Arrhythmia Database[8]: il dataset di riferimento globale per il ri-
+levamento delle aritmie. Contiene 48 registrazioni ambulatoriali a 2 derivazioni,
+campionate a 360 Hz. Il valore inestimabile di questo database è rappresentato dalle
+oltre 110 000 annotazionibeat-by-beatverificate da cardiologi, comprendenti una
+vasta gamma di battiti ectopici e aritmie complesse.
+3.St. Petersburg INCART 12-lead Arrhythmia Database[9]: composto da 75
+registrazioni a 12 derivazioni su pazienti affetti da patologie coronariche, con un
+campionamento a 257 Hz. L’eterogeneità della frequenza di campionamento e la
+presenza di molteplici patologie ischemiche e di conduzione lo rendono un banco
+di prova rigoroso per la validazione della robustezza degli algoritmi di filtraggio e
+peak detection.
+Le caratteristiche tecniche e cliniche principali dei tre database sono riassunte nella Ta-
+bella 1.
+2.2 Architettura Full-Stack del sistema (Flask e Nuxt 3)
+Il sistema è stato progettato seguendo un’architettura disaccoppiata di tipoclient-server.
+Questa separazione netta delle responsabilità (il calcolo scientifico demandato al backend
+e la visualizzazione interattiva delegata al frontend) garantisce modularità, scalabilità e
+manutenibilità del codice. L’organizzazione complessiva del sistema e il flusso del dato
+tra i suoi componenti sono illustrati nella Figura 1.
+IlBackendfunge da motore computazionale. La scelta di Python è stata dettata dalla
+vasta disponibilità di librerie consolidate per il DSP [4]. Il server è implementato tramite
+Flask[10], un micro-framework web leggero che esponeendpointREST (Representational
+--- PAGE 11 ---
+CAPITOLO 2. MATERIALI E METODI6
+Visualizzazione
+index.vue, Ecg-
+Grid/EcgSignal
+Battito medio
+average-beat.vue
+Strumenti clinici
+Calibro, Refer-
+to→jsPDF
+Endpoint REST
+/api/upload, /signals, /beats,
+/annotations, /battito-medio
+Pipeline di elaborazione
+filtro→picchi R→
+classificazione N/V
+→battito medio +
+delineazione DWT
+File WFDB: .dat, .hea, .atr (PhysioNet)
+Frontend·Nuxt 3 / Vue 3
+Backend·Python / Flask
+apiService: HTTP, REST, JSONretry, back-off, timeout
+lettura record
+Figura 1: Architetturafull-stackdella piattaforma. Il frontend in Nuxt 3 comunica con
+il backend in Flask tramite il moduloapiService(chiamate HTTP/REST con risposte in
+JSON); il backend decodifica i record WFDB di PhysioNet ed esegue la pipeline di elabo-
+razione del segnale.
+State Transfer) tramite API (Application Programming Interface). Il backend riceve i file
+caricati dall’utente, estrae i dati binari, applica i filtri, esegue l’inferenza morfologica e
+restituisce i risultati strutturati in formato JSON (JavaScript Object Notation).
+IlFrontendè implementato tramiteNuxt 3[11], un framework basato su Vue.js che
+facilita la creazione di applicazioni web reattive (SPA,Single Page Application). L’architet-
+tura frontend è basata su componenti modulari e gestisce uno stato globale reattivo sen-
+za ricorrere a librerie esterne complesse, sfruttando le funzionalità native (Composables)
+di Vue 3. La comunicazione tra i due strati avviene tramite chiamate HTTP (HyperText
+Transfer Protocol) asincrone, incapsulate in un moduloapiServicededicato.
+L’interfaccia delle API REST del backend è organizzata attorno a un insieme ristret-
+to diendpoint, ciascuno responsabile di una fase del flusso di lavoro: al caricamento dei
+file (/api/upload) seguono la lettura dei metadati dell’header(/api/header) e dei cam-
+pioni del segnale, eventualmente filtrati (/api/signals); il recupero delle annotazioni di
+riferimento del record (/api/annotations), la rilevazione e la classificazione dei battiti
+(/api/beats) e l’intera elaborazione del battito medio con la relativa delineazione morfo-
+logica (/api/battito-medio). Ogni risposta è serializzata in formato JSON, in modo da
+disaccoppiare completamente la logica di calcolo dalla sua rappresentazione visiva. Per ir-
+robustire questa comunicazione, le richieste sono incapsulate nel moduloapiService, che
+implementa un meccanismo diretryautomatico conback-offesponenziale e untimeout
+--- PAGE 12 ---
+CAPITOLO 2. MATERIALI E METODI7
+per singola richiesta, così da tollerare ritardi transitori del server senza compromettere
+l’esperienza d’uso.
+2.3 Elaborazione del segnale nel Backend
+2.3.1 Lettura dei file WFDB e gestione del dato
+Al caricamento dei tre file che compongono un record (.dat,.heae l’eventuale.atr)
+tramite l’endpoint/api/upload, i dati vengono elaborati dal modulowfdb-python[12]
+e mantenuti lato server per la durata della sessione.
+Un passaggio essenziale in questa fase è la conversione del segnale dalla rappresenta-
+zione digitale a quella fisica. Il file.datcontiene infatti campioni interi espressi in unità
+ADC, privi di significato clinico diretto; l’headerdichiara però, per ciascuna derivazione,
+il fattore di guadagno (in ADC units/mV) e il valore di riferimento (baseline) necessari a
+ricostruire l’ampiezza reale. Sfruttando tali metadati,wfdb-pythonrestituisce il segnale
+già convertito in millivolt, così che l’intera pipeline a valle, dal filtraggio al calcolo degli
+intervalli, operi direttamente in unità cliniche. Quando presente, il file.atrviene inol-
+tre interpretato per estrarre le annotazioni di riferimento (simboli e posizioni dei battiti
+verificate da esperti), impiegate dalla piattaforma comeground truthper il confronto con
+l’output degli algoritmi. Per garantire tempi di risposta adatti ad un uso interattivo, l’e-
+laborazione è infine posta sotto un limite superiore di 10 secondi di segnale continuo,
+ritenuto sufficiente per la valutazione morfologica di base e l’allineamento dei complessi
+QRS. Tale soglia corrisponde inoltre alla durata di una registrazione ECG clinica standard
+a riposo e alla lunghezza nativa dei record del database Norwegian (circa 10 secondi): fis-
+sarla a 10 secondi consente quindi di adottare una finestra di analisi uniforme anche per
+i database con registrazioni molto più lunghe, come MIT-BIH e INCART.
+2.3.2 Filtraggio digitale
+I segnali elettrocardiografici grezzi sono fisiologicamente affetti da rumore di varia natura,
+tra cui interferenze di rete a 50 Hz, artefatti da movimento muscolare (rumore ad alta
+frequenza) e fluttuazioni della linea isoelettrica (baseline wander) dovute alla respirazione
+del paziente.
+Per mitigare tali artefatti, è stato implementato un filtro passa-banda di Butterworth
+del 3°ordine, con frequenze di taglio a 0.5 Hz e 40 Hz. La scelta del filtro di Butterworth
+è motivata dalla sua caratteristica risposta in ampiezza massimamente piatta nella ban-
+da passante, una proprietà essenziale per non distorcere le frequenze di interesse clinico.
+Per evitare distorsioni di fase che altererebbero la localizzazione temporale dei marker
+fiduciali diagnostici, il filtro è stato applicato in modalità zero-phase (forward-backward)
+--- PAGE 13 ---
+CAPITOLO 2. MATERIALI E METODI8
+avvalendosi della funzionefiltfiltdella libreria SciPy. Poichéfiltfiltelabora il se-
+gnale in entrambe le direzioni temporali, l’ordine effettivo del filtro risulta raddoppiato
+(sei poli), con una transizione in frequenza corrispondentemente più ripida. L’implemen-
+tazione, riportata nel Listato 2.1, applica il filtro in modo indipendente a ciascuna deri-
+vazione del record; una clausola di salvaguardia restituisce il segnale originale qualora la
+sua lunghezza sia insufficiente per un’applicazione numericamente stabile del filtro.
+1def_bandpass_butter3(segnale, fs):
+2b, a = signal.butter(
+33, [BANDPASS_LOW / (fs / 2), BANDPASS_HIGH / (fs / 2)],
+4btype="bandpass")
+5ifsegnale.ndim == 2: # una colonna per derivazione
+6returnnp.vstack(
+7[_safe_filtfilt(b, a, segnale[:, i])
+8foriin range(segnale.shape[1])]).T
+9return_safe_filtfilt(b, a, segnale)
+10def_safe_filtfilt(b, a, x):
+11try:
+12returnsignal.filtfilt(b, a, x) # forward-backward, fase nulla
+13exceptValueError:
+14returnx # segnale troppo corto: nessun filtraggio
+Listing 2.1: Filtro passa-banda di Butterworth applicato a fase nulla.
+2.3.3 Rilevazione dei picchi R
+Il rilevamento preciso dell’onda R è il passo preliminare essenziale per qualsiasi analisi
+successiva. Il sistema implementa una strategia gerarchica difallbacksu 4 livelli, ga-
+rantendo un’elevata tolleranza agli artefatti, sfruttando gli algoritmi della libreria Neuro-
+Kit2 [5]:
+1. Applicazione del metodo didefaultdi NeuroKit2.
+2. In caso di fallimento o di rilevamento di un numero insufficiente di complessi, at-
+tivazione del robusto algoritmo di Pan-Tompkins [13] su segnale precedentemente
+pulito.
+3. Esecuzione di Pan-Tompkins direttamente sul segnale grezzo, utile in presenza di
+filtraggi che hanno eccessivamente smorzato l’ampiezza dell’onda R.
+4. Recupero tramitescipy.signal.find_peakscon soglia di ampiezza adattiva.
+Poiché le derivazioni di uno stesso record presentano qualità del segnale e ampiezza del-
+l’onda R molto diverse, la rilevazione non viene ancorata a una derivazione fissa, ma a una
+--- PAGE 14 ---
+CAPITOLO 2. MATERIALI E METODI9
+derivazione guidaselezionata automaticamente. Per ciascuna derivazione, il sistema ese-
+gue la strategia di rilevazione appena descritta e ne misura l’ampiezza mediana dei picchi
+R; viene quindi eletta a guida la derivazione che massimizza tale ampiezza, ovvero quella
+con il complesso QRS più marcato e, dunque, con il rapporto segnale-rumore più favore-
+vole per la localizzazione temporale dei battiti. A questa prima individuazione segue una
+fase di recupero dei picchi eventualmente omessi: ulteriori massimi locali che superano
+una soglia di ampiezza adattiva e risultano sufficientemente distanti dai picchi già noti
+vengono reintegrati nell’insieme dei battiti, riducendo il rischio di omissioni in presenza
+di morfologie irregolari.
+2.3.4 Classificazione euristica dei battiti
+Per distinguere i battiti fisiologici (N) da quelli ectopici ventricolari (V), è stato ideato
+un classificatore basato su regole euristiche. Il criterio si fonda sul confronto di ciascun
+battito con untemplatedel battito “normale” costruito a partire dalla registrazione stessa.
+Ogni singolo battito viene quindi confrontato con il template estraendo diversefeature:
+•Correlazione di Pearson:valuta la similarità di forma tra il battito in esame e il
+template.
+•Durata QRS:una durata marcatamente aumentata (la soglia adottata dal sistema è
+pari a 115 ms) è un forte indicatore di origine ventricolare.
+•Presenza onda P e Polarità:l’assenza della depolarizzazione atriale e un’inver-
+sione di polarità confermano la natura ectopica.
+•Intervalli RR:un battito anticipato seguito da una pausa compensatoria è tipico
+delle contrazioni premature.
+La costruzione del template di riferimento avviene in due fasi, così da renderla robusta
+alla presenza di battiti anomali. In una prima fase si seleziona un sottoinsieme di battiti
+candidati come normali in base alla regolarità degli intervalli RR, valutata tramite l’algo-
+ritmo di correzione dei picchi di tipo Kubios [14] fornito da NeuroKit2 [5], e se ne calcola
+la mediana campione per campione, ottenendo un template preliminare; in una seconda
+fase il template viene raffinato, conservando soltanto i battiti la cui correlazione con quello
+preliminare supera una soglia elevata (0.90) e ricalcolandone la mediana. L’impiego della
+mediana, anziché della media, rende il template insensibile a eventuali battiti aberranti
+sfuggiti alla prima selezione.
+La durata del complesso QRS, usata come indicatore di origine ventricolare, è misurata
+sul singolo battito a partire dai punti di inizio e fine del QRS individuati dalla delineazione
+DWT, ed è considerata anomala oltre la soglia di 115 ms. La verifica di polarità confronta
+invece il segno del picco dominante del complesso del battito in esame con quello del
+--- PAGE 15 ---
+CAPITOLO 2. MATERIALI E METODI10
+template, segnalando le inversioni tipiche dei battiti ectopici. La decisione finale non
+scaturisce da una singolafeature, ma da una cascata di regole che ne combinano i valori: un
+battito è etichettato come ventricolare (V) solo al verificarsi di combinazioni clinicamente
+significative (ad esempio, polarità invertita unita a QRS largo, oppure morfologia anomala
+unita all’assenza dell’onda P e alla prematurità del battito), come riportato nel Listato 2.2.
+1is_pvc = False
+2ifpolarita_invertitaandqrs_largo:
+3is_pvc = True
+4elifpolarita_invertitaandmorfologia_anomala:
+5is_pvc = True
+6elifmorfologia_anomalaandp_assenteandprematuro:
+7is_pvc = True
+8elifcorr < 0.65:
+9is_pvc = True
+10elifmorfologia_anomalaandrr_anomalo:
+11is_pvc = True
+12classificazioni.append("V"ifis_pvcelse"N")
+Listing 2.2: Estratto della cascata di regole per la classificazione di un battito come
+ventricolare (V).
+2.3.5 Calcolo del battito medio e delineazione morfologica
+La funzionalità diagnostica più avanzata della piattaforma è l’estrazione del battito medio.
+Il processo inizia con la segmentazione del segnale attorno ai picchi R precedentemente
+rilevati (e filtrati da eventuali ectopie). Per la segmentazione è stata definita una fine-
+stra temporale asimmetrica: 220 ms pre-R (per includere l’onda P) e 450 ms post-R (per
+includere interamente l’onda T e l’onda U, se presente).
+I segmenti vengono allineati e mediati per abbattere le componenti stocastiche di ru-
+more residuo. La delineazione delle onde, basata sull’algoritmo DWT proposto da Mar-
+tínez et al. [6], è invece eseguita sui singoli battiti: per ciascuno vengono individuati i
+punti caratteristici (inizio e fine dell’onda P, inizio e fine del complesso QRS, picco e fine
+dell’onda T). Le posizioni così ottenute, riportate sul battito medio, vengono tradotte in
+misurazioni cliniche standard (intervalli PR, QRS, QT).
+Il calcolo di tali punti fiduciali è reso robusto dall’aggregazione su tutti i cicli mediati:
+per ciascun punto caratteristico non si considera la posizione su un singolo battito, ma la
+medianadei suoi scostamenti rispetto al picco R, calcolata sull’intero insieme dei battiti
+normali. Da queste posizioni si derivano infine gli intervalli clinici come semplici diffe-
+renze temporali: l’intervallo PR come distanza tra l’inizio dell’onda P e l’inizio del QRS,
+la durata del QRS tra il suo inizio e la sua fine, e l’intervallo QT tra l’inizio del QRS e la
