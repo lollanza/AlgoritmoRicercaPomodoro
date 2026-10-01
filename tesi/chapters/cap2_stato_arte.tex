@@ -2,14 +2,151 @@
 \chapter{Stato dell'Arte}
 \label{chap:stato_arte}
 
+L'applicazione della computer vision in agricoltura ha conosciuto una rapida 
+evoluzione negli ultimi anni, passando da semplici algoritmi basati sul colore a 
+modelli avanzati di deep learning capaci di interpretare scene complesse. 
+Questo capitolo esamina lo stato dell'arte delle tecnologie di visione per la raccolta 
+robotizzata, partendo dall'evoluzione dei modelli di rilevamento e segmentazione 
+fino ad analizzare le tecniche proposte in letteratura per affrontare il problema 
+delle occlusioni nei grappoli densi.
+
+
 \section{Computer Vision per l'Agricoltura di Precisione}
 \label{sec:cv_agricoltura}
-% Evoluzione delle tecniche di visione artificiale: dai metodi tradizionali (soglia colore, filtri morfologici) all'avvento del Deep Learning.
+
+I primi tentativi di applicare la visione artificiale alla raccolta automatizzata 
+risalgono a diversi decenni fa e si basavano su tecniche classiche di elaborazione 
+delle immagini \cite{gongal2015sensors}. Questi approcci tradizionali utilizzavano 
+principalmente la segmentazione per soglia cromatica (ad esempio negli spazi colore 
+RGB o HSV), filtri morfologici per pulire il rumore di fondo e semplici algoritmi 
+geometrici per l'analisi dei contorni.
+
+Tuttavia, questi metodi mostravano limiti evidenti nelle condizioni reali di una serra. 
+La segmentazione basata sul colore funzionava solo in laboratorio sotto luce artificiale 
+stabile, mentre all'interno della serra la luce solare cambia continuamente durante la 
+giornata, mandando in crisi le soglie fisse. Il problema principale riguardava la forte 
+somiglianza cromatica tra i pomodori acerbi e la vegetazione circostante: le foglie e i 
+frutti verdi condividono tonalità quasi identiche, rendendo impossibile distinguerli 
+affidandosi al solo colore. Inoltre, le tecniche tradizionali non erano in grado di 
+gestire le frequenti sovrapposizioni tra frutti, finendo spesso per considerare interi 
+grappoli come un'unica sagoma indistinta.
+
+La svolta è arrivata con l'introduzione del \textit{Deep Learning} e in particolare 
+delle reti neurali convoluzionali (CNN). A differenza degli approcci classici, in cui le 
+regole per riconoscere un frutto dovevano essere scritte a mano, le reti neurali sono 
+capaci di apprendere autonomamente le caratteristiche visive a partire dalle immagini 
+fornite durante l'addestramento. Il modello impara così a combinare informazioni di colore, 
+bordi, sfumature e contesto della scena. Questo cambio di paradigma ha permesso di 
+riconoscere i pomodori anche in presenza di forti variazioni di luce, ombre fitte e 
+grappoli molto densi, gettando le basi percettive per i moderni sistemi di raccolta robotizzata.
 
 \section{Rilevamento e Segmentazione delle Istanze}
 \label{sec:detection_segmentation}
-% Modelli Object Detection (YOLO) e Instance Segmentation (Mask R-CNN, YOLO-seg): confronto e limiti delle bounding box in scene affollate.
+
+All'interno delle tecniche di deep learning per la visione artificiale, i modelli 
+per la localizzazione degli oggetti si dividono storicamente in due grandi categorie: 
+gli approcci a due stadi (come la famiglia R-CNN \cite{he2017mask}), che prima generano 
+regioni candidate e poi le classificano, e i modelli a singolo stadio (\textit{single-stage}), 
+tra cui spicca l'architettura YOLO (\textit{You Only Look Once}) \cite{redmon2016you}.
+
+I modelli YOLO hanno introdotto una vera e propria rivoluzione nel settore: invece di 
+spezzare l'elaborazione in fasi separate, una singola rete neurale elabora l'immagine 
+in un unico passaggio, producendo direttamente le coordinate degli oggetti e le relative 
+classi. Questa caratteristica garantisce una velocità di esecuzione molto elevata, 
+rendendo l'algoritmo adatto a funzionare in tempo reale a bordo di sistemi robotici.
+
+Nel campo della raccolta robotizzata, è fondamentale distinguere tra due diversi 
+compiti di visione che i modelli YOLO moderni possono svolgere:
+\begin{itemize}
+    \item \textbf{Object Detection}: il modello localizza ciascun oggetto presente 
+    nella scena racchiudendolo all'interno di una \textit{bounding box} rettangolare, 
+    a cui associa una classe e un punteggio di confidenza. Questo approccio è molto rapido, 
+    ma per sua natura approssimato: il rettangolo indica la presenza del pomodoro ma 
+    include anche porzioni di sfondo, rami e foglie, senza fornire alcuna informazione 
+    sulla sagoma reale del frutto.
+    \item \textbf{Instance Segmentation}: rappresenta un'estensione più avanzata, in cui 
+    il modello non si limita a disegnare un rettangolo, ma assegna un'etichetta a ogni 
+    singolo pixel, producendo una maschera binaria che ritaglia la forma esatta di ciascun 
+    pomodoro \cite{liu2020yolotomato}. In un'applicazione di raccolta robotica, disporre della 
+    maschera a livello di pixel è indispensabile: consente di distinguere pomodori a stretto 
+    contatto, calcolarne con precisione il centroide e delimitare i margini fisici necessari 
+    per posizionare correttamente l'organo di presa.
+\end{itemize}
+
+All'interno del progetto di ricerca del nostro laboratorio, la prima fase del lavoro 
+è stata dedicata proprio allo studio, all'addestramento e all'ottimizzazione di questi 
+modelli percettivi su un dataset acquisito in serra \cite{collega_yolo}. Da tale indagine 
+comparativa è emerso che il modello \textbf{YOLO11-x} (nella sua configurazione per 
+l'Instance Segmentation) garantisce il miglior compromesso tra accuratezza metrica e 
+qualità delle maschere prodotte, riuscendo a distinguere con efficacia i pomodori anche 
+in presenza di fogliame fitto.
+
+Tuttavia, disporre delle maschere di segmentazione fornite da YOLO costituisce solo il 
+primo passo. La rete neurale si limita a dire "dove si trovano i pomodori", ma non fornisce 
+alcuna informazione su come essi interagiscano nello spazio tridimensionale, chi copra chi 
+e quale debba essere l'ordine di raccolta. È esattamente su questo divario che si innesta 
+il presente lavoro di tesi.
+
 
 \section{Tecniche di Gestione delle Occlusioni in Letteratura}
 \label{sec:occlusioni_letteratura}
-% Approcci esistenti per il rilevamento delle occlusioni e pianificazione del picking (metodi 2D vs 3D).
+
+La gestione delle occlusioni reciproche all'interno di grappoli densi rappresenta 
+uno degli aspetti più complessi nella robotica agricola \cite{bac2014harvesting}. 
+Quando i frutti crescono a stretto contatto, determinare quale pomodoro si trovi 
+davanti agli altri e stabilire un ordine corretto di raccolta è indispensabile per 
+consentire all'organo di presa di operare in sicurezza senza rischiare di danneggiare 
+i frutti circostanti \cite{silwal2017design}.
+
+All'interno dell'architettura complessiva sviluppata nel nostro laboratorio, l'obiettivo 
+applicativo a lungo termine prevede l'impiego di una telecamera RGB-D montata direttamente 
+sul braccio meccanico (\textit{eye-in-hand}), così da guidare il manipolatore verso il target 
+combinando l'informazione visiva con la stima della distanza \cite{collega_yolo}. 
+Tuttavia, i dati raccolti sul campo in serra e messi a disposizione per la fase di addestramento 
+dei modelli percettivi consistevano esclusivamente in immagini a colori bidimensionali (RGB). 
+Inoltre, la letteratura scientifica evidenzia come l'elaborazione diretta di nuvole di punti 
+3D in ambiente agricolo presenti sensibili criticità: i sensori di profondità risentono delle 
+variazioni di illuminazione solare tipiche delle serre, la vegetazione sottile introduce 
+rumore geometrico e gli algoritmi di ricostruzione volumetrica richiedono un carico computazionale 
+elevato, difficilmente sostenibile durante i cicli di controllo rapido del braccio 
+\cite{gongal2015sensors, bac2014harvesting}. Si è quindi reso necessario concentrare questo 
+lavoro di tesi sullo sviluppo di un modulo decisionale che operi interamente sul piano 
+bidimensionale delle immagini RGB, estraendo la gerarchia spaziale delle occlusioni prima 
+di inviare il punto di mira all'attuatore.
+
+Sul piano bidimensionale, il primissimo approccio che abbiamo sviluppato insieme al collega 
+nella fase iniziale del lavoro — subito dopo aver completato l'addestramento del modello 
+YOLO — è consistito nel valutare le occlusioni sfruttando direttamente i riquadri di 
+delimitazione rettangolari (\textit{bounding box}) forniti nativamente dalla rete, 
+in linea con diversi lavori preliminari presenti in letteratura \cite{chen2011practical}. 
+Tuttavia, l'applicazione pratica di questa prima soluzione ha mostrato fin da subito un grave 
+limite geometrico: i pomodori hanno una conformazione curvilinea, per cui i quattro angoli della 
+scatola rettangolare racchiudono una percentuale consistente di spazio vuoto. Quando due 
+frutti si trovano vicini o disposti lungo linee diagonali, le rispettive bounding box finiscono 
+per sovrapporsi vistosamente anche se i corpi dei pomodori non sono affatto a contatto. 
+Questo fenomeno genera falsi blocchi geometrici, inducendo il sistema a considerare occlusi 
+pomodori che nella realtà sarebbero perfettamente liberi e accessibili.
+
+In letteratura, alcuni studi hanno proposto di ridurre queste imprecisioni ricorrendo 
+all'involucro convesso (\textit{Convex Hull}) per regolarizzare i contorni dei frutti 
+\cite{changhui2017reconstruction} o all'approssimazione mediante ellissi orientate 
+\cite{wang2024multifruit}. Tuttavia, la maggior parte di queste indagini si è concentrata 
+principalmente sulla ricostruzione morfologica del singolo frutto isolato, senza sviluppare 
+un algoritmo decisionale completo per stabilire la sequenza ottima di prelievo.
+
+Un ulteriore limite comune a gran parte dei metodi esistenti risiede nella natura statica 
+della pianificazione. Nella quasi totalità dei casi, l'ordine di raccolta viene calcolato 
+in un unico passaggio iniziale, ordinando i pomodori in base alla sola visibilità o alla distanza. 
+Questo approccio ignora la dinamica fisica dell'operazione di raccolta: il prelievo del primo 
+pomodoro frontale modifica immediatamente la scena, liberando lo spazio di manovra e rendendo 
+accessibili i frutti retrostanti che in precedenza risultavano bloccati.
+
+Il presente lavoro di tesi nasce esattamente dalla necessità di superare il nostro approccio 
+iniziale a \textit{bounding box} e le limitazioni dei metodi statici. L'obiettivo è proporre 
+una pipeline 2D leggera e deterministica che, operando sulle maschere di segmentazione di 
+YOLO11-x, utilizzi il Convex Hull per ripulire le imperfezioni, modelli i frutti tramite ellissi 
+orientate e introduca un algoritmo dinamico (\textit{Pick \& Update}) capace di ricalcolare le 
+priorità a ogni prelievo simulato. Nel capitolo successivo verrà descritta nel dettaglio 
+la formulazione matematica e l'architettura completa di questa metodologia.
+
+
